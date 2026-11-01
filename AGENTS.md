@@ -3,6 +3,13 @@
 ## Scope & Branches
 This personal fork may contain public customizations. Keep `main` as an upstream mirror; integrate accepted work into `codex/personal`. Use `codex/feat/<name>` or `codex/sync/<upstream-tag>` branches with separate worktrees for substantial features or upstream upgrades. Upstream PRs/issues are optional, only when requested. Stage one uses manual updates; personal stable packaging and in-app updates are not implemented yet.
 
+## Feature Chat Workflow
+For new feature implementation, read this file and `docs/personal-development.md`; inspect directory, branch, and existing changes. Start from committed `codex/personal` in a dedicated worktree. Reuse an already-correct feature worktree; do not create another unnecessarily. If detached, create `codex/feat/<name>` there. Run `dev init` and `dev check` using the entry below; verify isolated identity, data, and outputs before implementation.
+
+After implementation, test, review, and report results, skipped checks, and remaining issues. Commit and merge only when authorized; honor explicit advance authorization without asking again. Commit approval alone does not authorize merging. Merge into `codex/personal` from its owning checkout after checking its state, then verify integration. Completion never implies push, release, installation, or archiving.
+
+Before an authorized archive, confirm work is merged, preserved, or discarded as the user directed; inspect remaining changes/untracked/needed ignored files, and gracefully stop only this worktree's development processes. Preserve needed artifacts and external data. Do not force cleanup with unsaved work or treat an archive snapshot as a merge.
+
 ## Project Structure
 - `apps/toccata-studio/Sources/`, `Tests/`, `Resources/`: SwiftUI/AppKit client, XCTest suites, bundled assets.
 - `core/toccata-core/src/`: Rust collector, SQLite writer, socket IPC, inline tests.
