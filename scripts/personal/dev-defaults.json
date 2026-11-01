@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "sdk_version": "26.2",
+  "rust_version": "1.99.1",
+  "bundle_id_prefix": "cn.ericgao.toccata.dev",
+  "app_name_prefix": "Toccata Dev",
+  "configuration": "debug"
+}

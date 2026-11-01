@@ -9,3 +9,6 @@ dist/
 *.sqlite-wal
 *.sqlite-shm
 apps/toccata-studio/Resources/build-info.json
+
+# Personal development state; reproducible scripts live in scripts/personal/.
+/.local-dev/
