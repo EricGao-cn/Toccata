@@ -24,10 +24,14 @@ struct TasksView: View {
     let mode: TaskViewMode
 
     @State private var title = ""
-    @State private var query = ""
+    @State private var localQuery = ""
     @Binding private var selection: String?
     @Binding private var taskPeriod: TaskReviewPeriod
-    @State private var reviewRange: TaskReviewRange = .preset(.thisWeek)
+    @State private var localReviewRange: TaskReviewRange = .preset(.thisWeek)
+    private let embeddedReview: Bool
+    private let sharedReviewRange: Binding<TaskReviewRange>?
+    private let sharedReviewQuery: Binding<String>?
+    private let reviewReferenceDate: Date?
     @State private var showsCustomReviewRange = false
     @State private var showsCompleted = true
     @State private var copied = false
@@ -39,10 +43,32 @@ struct TasksView: View {
     @FocusState private var taskListFocused: Bool
 
     init(mode: TaskViewMode, selection: Binding<String?> = .constant(nil),
-         taskPeriod: Binding<TaskReviewPeriod> = .constant(.thisWeek)) {
+         taskPeriod: Binding<TaskReviewPeriod> = .constant(.thisWeek),
+         embeddedReview: Bool = false, reviewRange: Binding<TaskReviewRange>? = nil,
+         reviewQuery: Binding<String>? = nil, reviewReferenceDate: Date? = nil) {
         self.mode = mode
         _selection = selection
         _taskPeriod = taskPeriod
+        self.embeddedReview = embeddedReview
+        self.sharedReviewRange = reviewRange
+        self.sharedReviewQuery = reviewQuery
+        self.reviewReferenceDate = reviewReferenceDate
+    }
+
+    private var query: String {
+        get { sharedReviewQuery?.wrappedValue ?? localQuery }
+        nonmutating set {
+            if let sharedReviewQuery { sharedReviewQuery.wrappedValue = newValue }
+            else { localQuery = newValue }
+        }
+    }
+
+    private var reviewRange: TaskReviewRange {
+        get { sharedReviewRange?.wrappedValue ?? localReviewRange }
+        nonmutating set {
+            if let sharedReviewRange { sharedReviewRange.wrappedValue = newValue }
+            else { localReviewRange = newValue }
+        }
     }
 
     private var taskScope: MenuTaskScope {
@@ -59,7 +85,7 @@ struct TasksView: View {
         store.menuTasks(for: taskScope, relativeTo: referenceDate)
     }
     private var reviewSnapshot: TaskReviewSnapshot {
-        TaskReviewSnapshot(tasks: store.tasks, range: reviewRange, referenceDate: referenceDate, query: query)
+        TaskReviewSnapshot(tasks: store.tasks, range: reviewRange, referenceDate: reviewReferenceDate ?? referenceDate, query: query)
     }
 
     var body: some View {
@@ -98,25 +124,27 @@ struct TasksView: View {
         let review = mode == .review ? reviewSnapshot : nil
         return VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .top) {
-                    VStack(alignment: .leading, spacing: 7) {
-                        Text(mode.title)
-                            .font(.system(size: 25, weight: .bold, design: .rounded))
-                        Text(explanation)
-                            .font(.system(size: 13))
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    Spacer(minLength: 8)
-                    if let review {
-                        Button(action: copyReview) {
-                            Label(copied ? L10n.tr("已复制") : L10n.tr("复制回顾"), systemImage: copied ? "checkmark" : "doc.on.doc")
-                                .fixedSize()
+                if !embeddedReview {
+                    HStack(alignment: .top) {
+                        VStack(alignment: .leading, spacing: 7) {
+                            Text(mode.title)
+                                .font(.system(size: 25, weight: .bold, design: .rounded))
+                            Text(explanation)
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-                        .buttonStyle(.bordered)
-                        .controlSize(.small)
-                        .help(L10n.tr("复制当前范围和搜索结果，包含完成状态、任务详情与子任务"))
-                        .disabled(review.tasks.isEmpty)
+                        Spacer(minLength: 8)
+                        if let review {
+                            Button(action: copyReview) {
+                                Label(copied ? L10n.tr("已复制") : L10n.tr("复制回顾"), systemImage: copied ? "checkmark" : "doc.on.doc")
+                                    .fixedSize()
+                            }
+                            .buttonStyle(.bordered)
+                            .controlSize(.small)
+                            .help(L10n.tr("复制当前范围和搜索结果，包含完成状态、任务详情与子任务"))
+                            .disabled(review.tasks.isEmpty)
+                        }
                     }
                 }
 
@@ -125,7 +153,7 @@ struct TasksView: View {
                     quickAdd
                 } else if mode == .inbox {
                     quickAdd
-                } else if let review {
+                } else if let review, !embeddedReview {
                     reviewRangeControl
                     VStack(alignment: .leading, spacing: 5) {
                         Text(review.dateLabel)
@@ -279,7 +307,7 @@ struct TasksView: View {
     private var searchField: some View {
         HStack(spacing: 7) {
             Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-            TextField(L10n.tr("搜索任务名称与详情"), text: $query)
+            TextField(L10n.tr("搜索任务名称与详情"), text: Binding(get: { query }, set: { query = $0 }))
                 .textFieldStyle(.plain)
             if !query.isEmpty {
                 Button { query = "" } label: {

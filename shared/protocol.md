@@ -15,6 +15,8 @@
 | `toccata.statistics-cache.sqlite` | 默认键盘数据库的按天统计衍生缓存，由 Studio 维护 |
 | `toccata.sock` | Unix socket，受非空 `socket_path` 配置覆盖 |
 | `tasks.sqlite` | Studio 任务 SQLite 数据库 |
+| `daily-notes/YYYY-MM-DD.md` | Studio 独立每日记录，UTF-8 Markdown；日期按本地自然日 |
+| `daily-notes/Backups/` | 用户处理外部编辑冲突时保留的版本，不进入每日记录索引 |
 | `toccata.lock` | 后台服务的排他实例锁 |
 | `core.log` | 由 App 启动的 helper 的启动、权限与写入错误日志，不记录键名或文本 |
 
@@ -163,7 +165,7 @@ CREATE TABLE IF NOT EXISTS tasks (
 CREATE INDEX IF NOT EXISTS task_parent ON tasks(parent_id);
 CREATE INDEX IF NOT EXISTS task_completed ON tasks(completed_at);
 
--- 历史过程记录仅为兼容保留，不再提供独立界面或新增入口；新笔记使用 tasks.details 保存 Markdown。
+-- 历史任务过程记录仅为兼容保留；任务详情使用 tasks.details，独立每日记录保存为 Markdown 文件。
 CREATE TABLE IF NOT EXISTS task_progress (
   id         TEXT PRIMARY KEY NOT NULL,
   task_id    TEXT NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
@@ -224,6 +226,18 @@ CREATE INDEX IF NOT EXISTS progress_task ON task_progress(task_id, created_at);
 时间筛选包含起点和当前时刻，排除将来的完成时间。复制回顾包含当前筛选结果的任务名称、父任务名称、完成时间、详情与过程文本，可作为周报素材。
 
 ## 5. 配置
+
+### 独立每日记录
+
+每日记录由 Studio 单独管理，不关联任务、不进入 `tasks.sqlite`，不依赖采集服务。日期文件名使用固定 Gregorian `YYYY-MM-DD` 格式，与界面语言无关；显示日期采用界面语言。只浏览空白日期不会创建文件，首次非空写入后才创建。清空已有记录会保存空文件，不隐式删除文件。
+
+菜单栏和工作台共享同一份草稿；原生文本编辑器完整保留 Markdown 源文。编辑后短暂延迟自动保存，写入采用原子替换，关闭/退出沿用统一的待保存草稿检查。失败草稿保留在内存并阻止正常退出，不报告成功。菜单栏每次打开使用当天日期；正在编辑时跨午夜不自动切换，以免内容落入另一日。
+
+外部文件按 UTF-8 读取；非法日期、符号链接和非普通文件不作为可写记录。重新进入或应用激活时刷新外部内容；保存前校验文件是否与编辑基线一致。外部修改或删除遇到未保存草稿时，停止覆盖并显示冲突。用户选择保留的版本前，将另一版本保存到 `Backups/`。此机制不是多进程实时协同编辑协议。
+
+回顾的每日记录与任务共用日期范围，分别浏览、分别复制，另有显式“复制全部”入口。任务部分继续使用真实完成时间与当前未完成任务的既有筛选语义。每日记录按日期文件名筛选、从早到晚输出，复制不改写源 Markdown，也不依据记录内容自动创建任务。
+
+### 后台服务配置
 
 `config.json` 全部字段可省略：
 

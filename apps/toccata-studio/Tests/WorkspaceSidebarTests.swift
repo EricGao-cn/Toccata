@@ -95,8 +95,8 @@ private final class SidebarFixture {
         host.view.cacheDisplay(in: host.view.bounds, to: bitmap)
         // Row centers in this fixed-size fixture, measured from its rendered layout.
         let rowCenters: [WorkspaceSection: CGFloat] = [
-            .tasks: 37, .inbox: 69, .taskCalendar: 101, .review: 133,
-            .activity: 198, .ranking: 230, .generalSettings: 295
+            .tasks: 37, .inbox: 69, .taskCalendar: 101, .dailyNotes: 133, .review: 165,
+            .activity: 230, .ranking: 262, .generalSettings: 327
         ]
         let fromTop = rowCenters[destination]!
         let point = NSPoint(x: 110, y: host.view.isFlipped ? fromTop : host.view.bounds.height - fromTop)

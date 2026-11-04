@@ -4,6 +4,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
     case tasks = "任务"
     case inbox = "收集箱"
     case taskCalendar = "任务日历"
+    case dailyNotes = "每日记录"
     case review = "任务回顾"
     case activity = "键盘活跃"
     case ranking = "应用与趋势"
@@ -15,6 +16,7 @@ enum WorkspaceSection: String, CaseIterable, Identifiable {
         case .tasks: return "checklist"
         case .inbox: return "tray"
         case .taskCalendar: return "calendar"
+        case .dailyNotes: return "book.closed"
         case .review: return "checkmark.circle"
         case .activity: return "waveform.path"
         case .ranking: return "chart.bar.xaxis"
@@ -39,7 +41,7 @@ struct WorkspaceSidebar: View {
         ScrollViewReader { proxy in
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
-                    group(L10n.tr("任务"), items: [.tasks, .inbox, .taskCalendar, .review])
+                    group(L10n.tr("工作"), items: [.tasks, .inbox, .taskCalendar, .dailyNotes, .review])
                     group(L10n.tr("时间与活动"), items: [.activity, .ranking])
                     group(L10n.tr("设置"), items: [.generalSettings])
                 }
@@ -100,7 +102,7 @@ struct WorkspaceSidebar: View {
                 Image(systemName: item.symbol)
                     .font(.system(size: 14))
                     .frame(width: 16)
-                Text(L10n.key(item.rawValue))
+                Text(item == .review ? L10n.tr("回顾") : L10n.key(item.rawValue))
                     .font(.system(size: 13, weight: .medium))
                     .lineLimit(1)
                 Spacer(minLength: 4)

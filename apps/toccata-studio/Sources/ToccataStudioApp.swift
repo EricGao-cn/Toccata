@@ -44,6 +44,10 @@ struct ContentView: View {
     @State private var selectedTaskID: String?
     @State private var isOpeningTasks = false
     @State private var homeNavigationFailed = false
+    @State private var selectedNoteDay = DailyNoteDate.key(Date())
+    @State private var returnToReview = false
+    @State private var researchReviewRange: TaskReviewRange = .preset(.thisWeek)
+    @State private var researchReviewTab: DailyReviewTab = .notes
     @Binding var requestedSection: String?
     private let openAbout: () -> Void
     private let initialActivityRange: ActivityRange
@@ -62,8 +66,8 @@ struct ContentView: View {
     private var openCount: Int { tasks.tasks.filter { $0.parentID == nil && !$0.isCompleted }.count }
     private var showsTaskWorkspace: Bool {
         switch section {
-        case .tasks, .inbox, .taskCalendar, .review: return true
-        case .activity, .ranking, .generalSettings: return false
+        case .tasks, .inbox, .taskCalendar: return true
+        case .dailyNotes, .review, .activity, .ranking, .generalSettings: return false
         }
     }
 
@@ -77,6 +81,13 @@ struct ContentView: View {
         .languageChangeTransition()
         .onAppear(perform: openRequestedSection)
         .onChange(of: requestedSection) { _ in openRequestedSection() }
+        .onReceive(DailyNotesNavigation.shared.$requestedDay.receive(on: RunLoop.main)) { day in
+            guard let day else { return }
+            selectedNoteDay = day
+            returnToReview = false
+            selection = .dailyNotes
+            DailyNotesNavigation.shared.requestedDay = nil
+        }
         .onChange(of: tasks.tasks.map(\.id)) { ids in
             if let selectedTaskID, !ids.contains(selectedTaskID) { self.selectedTaskID = nil }
         }
@@ -163,8 +174,7 @@ struct ContentView: View {
         case .tasks: TasksView(mode: .tasks, selection: $selectedTaskID, taskPeriod: $taskPeriod)
         case .inbox: TasksView(mode: .inbox, selection: $selectedTaskID)
         case .taskCalendar: TaskCalendarView(selection: $selectedTaskID)
-        case .review: TasksView(mode: .review, selection: $selectedTaskID)
-        case .activity, .ranking, .generalSettings: EmptyView()
+        case .dailyNotes, .review, .activity, .ranking, .generalSettings: EmptyView()
         }
     }
 
@@ -204,7 +214,18 @@ struct ContentView: View {
         case .activity: ActivityView(initialRange: initialActivityRange)
         case .ranking: RankingView()
         case .generalSettings: GeneralSettingsView(openAbout: openAbout)
-        case .tasks, .inbox, .taskCalendar, .review: EmptyView()
+        case .dailyNotes:
+            DailyNotesWorkspaceView(selectedDay: $selectedNoteDay, canReturnToReview: returnToReview) {
+                selection = .review
+                returnToReview = false
+            }
+        case .review:
+            DailyReviewView(range: $researchReviewRange, tab: $researchReviewTab) { day in
+                selectedNoteDay = day
+                returnToReview = true
+                selection = .dailyNotes
+            }
+        case .tasks, .inbox, .taskCalendar: EmptyView()
         }
     }
 
@@ -219,7 +240,7 @@ struct ContentView: View {
         case "最近 7 天", "最近7天":
             taskPeriod = .lastSevenDays
             destination = .tasks
-        case "完成回顾":
+        case "完成回顾", "回顾":
             destination = .review
         case "按键与应用", "键盘与应用", "活跃日历":
             destination = .ranking

@@ -2,13 +2,14 @@ import Combine
 import Foundation
 
 enum MenuPanelPage: String, CaseIterable, Identifiable {
-    case tasks, calendar, activity
+    case tasks, calendar, dailyNotes, activity
 
     var id: String { rawValue }
     var title: String {
         switch self {
         case .tasks: return L10n.tr("任务管理")
         case .calendar: return L10n.tr("任务日历")
+        case .dailyNotes: return L10n.tr("每日记录")
         case .activity: return L10n.tr("活动速览")
         }
     }

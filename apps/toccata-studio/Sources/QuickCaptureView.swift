@@ -30,9 +30,9 @@ struct QuickCaptureView: View {
     var body: some View {
         let _ = interfaceLanguage.language
         VStack(spacing: 0) {
-            if page != .activity { header }
+            if page == .tasks || page == .calendar { header }
             if page == .tasks { captureField }
-            if page != .activity, let error = tasks.errorMessage {
+            if page == .tasks || page == .calendar, let error = tasks.errorMessage {
                 Text(error)
                     .font(.system(size: 10))
                     .foregroundStyle(.red)
@@ -45,6 +45,8 @@ struct QuickCaptureView: View {
                     taskList.padding(.top, 8)
                 } else if page == .calendar {
                     MenuCalendarView()
+                } else if page == .dailyNotes {
+                    MenuDailyNotesView()
                 } else {
                     MenuActivityOverview()
                 }
@@ -330,6 +332,7 @@ struct QuickCaptureView: View {
             navigationButton(.tasks, title: L10n.tr("任务"),
                              symbol: page == .tasks ? "checkmark.circle.fill" : "checkmark.circle")
             navigationButton(.calendar, title: L10n.tr("日历"), symbol: "calendar")
+            navigationButton(.dailyNotes, title: L10n.tr("每日记录"), symbol: "book.closed")
             navigationButton(.activity, title: L10n.tr("活动"), symbol: "waveform.path")
             Button { presentation.openWorkbench() } label: {
                 navigationLabel(L10n.tr("工作台"), symbol: "macwindow", selected: false)

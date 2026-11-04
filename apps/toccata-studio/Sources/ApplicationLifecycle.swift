@@ -203,9 +203,9 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
 
     private func showSaveFailure() {
         let alert = NSAlert()
-        alert.messageText = L10n.tr("任务修改尚未保存")
-        alert.informativeText = taskStore.errorMessage ?? L10n.tr("请重试保存，再关闭窗口或退出 Toccata。")
-        alert.addButton(withTitle: L10n.tr("返回任务"))
+        alert.messageText = L10n.tr("修改尚未保存")
+        alert.informativeText = DailyNotesStore.shared.errors.values.first ?? taskStore.errorMessage ?? L10n.tr("请重试保存，再关闭窗口或退出 Toccata。")
+        alert.addButton(withTitle: L10n.tr("返回编辑"))
         alert.runModal()
     }
 }
