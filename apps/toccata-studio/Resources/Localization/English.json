@@ -575,5 +575,7 @@
   "采用文件版本": "Use file version",
   "，暂无记录，可补写": ", no entry; you can add one",
   "，有记录": ", has an entry",
-  "复制所选时段的全部记录和任务，不应用任务搜索。": "Copy all notes and tasks in the selected period, without the task search filter."
+  "复制所选时段的全部记录和任务，不应用任务搜索。": "Copy all notes and tasks in the selected period, without the task search filter.",
+  "个人版采用手动更新": "Personal builds use manual updates",
+  "请使用个人版安装包更新；安装前备份应用和数据。": "Update using a personal package. Back up the app and data before installing."
 }

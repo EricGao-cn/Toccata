@@ -3,6 +3,7 @@ import Foundation
 /// Shared location for the workspace, with optional daemon path overrides.
 enum AppPaths {
     static let supportDirectory: URL = {
+        if let directory = PersonalDistribution.dataDirectory { return directory }
         if let path = ProcessInfo.processInfo.environment["TOCCATA_DATA_DIR"], !path.isEmpty {
             return URL(fileURLWithPath: path, isDirectory: true)
         }
@@ -17,6 +18,7 @@ enum AppPaths {
     }
 
     static var databaseURL: URL {
+        if PersonalDistribution.isPersonal { return supportDirectory.appendingPathComponent("toccata.db") }
         if let path = configuration["db_path"] as? String, !path.isEmpty {
             return URL(fileURLWithPath: path)
         }
@@ -24,6 +26,7 @@ enum AppPaths {
     }
 
     static var socketPath: String {
+        if PersonalDistribution.isPersonal { return supportDirectory.appendingPathComponent("toccata.sock").path }
         if let path = configuration["socket_path"] as? String, !path.isEmpty { return path }
         return supportDirectory.appendingPathComponent("toccata.sock").path
     }

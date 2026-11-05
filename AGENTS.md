@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Scope & Branches
-This personal fork may contain public customizations. Keep `main` as an upstream mirror; integrate accepted work into `codex/personal`. Use `codex/feat/<name>` or `codex/sync/<upstream-tag>` branches with separate worktrees for substantial features or upstream upgrades. Upstream PRs/issues are optional, only when requested. Stage one uses manual updates; personal stable packaging and in-app updates are not implemented yet.
+This personal fork may contain public customizations. Keep `main` as an upstream mirror; integrate accepted work into `codex/personal`. Use `codex/feat/<name>` or `codex/sync/<upstream-tag>` branches with separate worktrees for substantial features or upstream upgrades. Upstream PRs/issues are optional, only when requested. Personal distribution uses manual updates and the separate entry points described in `docs/personal-release.md`; personal in-app installation updates remain disabled.
 
 ## Feature Chat Workflow
 For new feature implementation, read this file and `docs/personal-development.md`; inspect directory, branch, and existing changes. Start from committed `codex/personal` in a dedicated worktree. Reuse an already-correct feature worktree; do not create another unnecessarily. If detached, create `codex/feat/<name>` there. Run `dev init` and `dev check` using the entry below; verify isolated identity, data, and outputs before implementation.
@@ -37,6 +37,8 @@ Personal development uses SDK 26.2; upstream scripts retain SDK 26.5. Never weak
 Each development worktree needs independent bundle identity, preferences, data, and build output; only toolchains/download caches may be shared. Preserve legacy development data during setup. Never point development at upstream/personal stable data or embed/start collection implicitly. Keep collection local without screenshots, audio, or typed text.
 
 Personal stable distribution needs a separate entry point; never turn the development launcher into a stable installer by redirecting it to daily-use data.
+
+Use `scripts/personal/release.py` for candidate/tagged packaging and `maintenance.py` for offline backup, staging, paired installation, rollback and interrupted-transaction recovery. Maintenance commands default to plans; real execution needs task-specific authorization, normal shutdown checks, and explicit execution flags. Never remove pending transaction markers to bypass recovery. Candidate builds cannot be installed as stable releases and never start collection. Rehearse on synthetic data before any real-data operation.
 
 Stable releases require an accepted clean commit, fixed personal tag, SHA, SDK, and checksum. Preserve upstream tags. Validate backup/restore and migrations on copies; downgrading an app does not roll back its database. Building does not authorize installation/publication. Follow task-specific authorization; local commit approval never implies permission to push.
 

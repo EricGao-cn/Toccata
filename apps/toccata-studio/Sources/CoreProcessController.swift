@@ -40,6 +40,7 @@ final class CoreProcessController: ObservableObject {
 
     @discardableResult
     func start(requestPermission: Bool = true) -> Bool {
+        guard !PersonalDistribution.isCandidate else { return false }
         // Health checks are cheap and silent while a helper is already available.
         guard stopRequests == 0 else { return false }
         if let process, process.isRunning { return false }
@@ -90,6 +91,7 @@ final class CoreProcessController: ObservableObject {
     /// login may already be running, so this cannot depend on start()'s guards.
     @discardableResult
     func requestInputMonitoringPermission() -> Bool {
+        guard !PersonalDistribution.isCandidate else { return false }
         if preflightAccess() { return true }
         guard permitsPermissionPrompt else { return false }
         let allowed = requestAccess()

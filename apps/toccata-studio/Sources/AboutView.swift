@@ -127,34 +127,42 @@ struct AboutView: View {
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.accentColor.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Label(L10n.tr("软件更新"), systemImage: "arrow.triangle.2.circlepath").font(.headline)
-                    Spacer()
-                    if checker.state == .checking || updater.state == .verifying || updater.state == .installing {
-                        ProgressView().controlSize(.small).accessibilityLabel(progressLabel)
+            if PersonalDistribution.isPersonal {
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(L10n.tr("个人版采用手动更新"), systemImage: "shippingbox").font(.headline)
+                    Text(L10n.tr("请使用个人版安装包更新；安装前备份应用和数据。"))
+                        .font(.caption).foregroundStyle(.secondary)
+                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+            } else {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label(L10n.tr("软件更新"), systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                        Spacer()
+                        if checker.state == .checking || updater.state == .verifying || updater.state == .installing {
+                            ProgressView().controlSize(.small).accessibilityLabel(progressLabel)
+                        }
                     }
-                }
-                Group {
-                    if updater.state == .idle { updateStatus }
-                    else { downloadStatus }
-                }
-                .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
-                HStack {
-                    updateAction
-                    Spacer()
-                    if case let .available(update) = checker.state {
-                        Link(L10n.tr("查看新版 ↗"), destination: update.pageURL)
-                    } else {
-                        Link(L10n.tr("发布页面 ↗"), destination: ToccataReleaseSource.releasesURL)
+                    Group {
+                        if updater.state == .idle { updateStatus }
+                        else { downloadStatus }
                     }
+                    .frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
+                    HStack {
+                        updateAction
+                        Spacer()
+                        if case let .available(update) = checker.state {
+                            Link(L10n.tr("查看新版 ↗"), destination: update.pageURL)
+                        } else {
+                            Link(L10n.tr("发布页面 ↗"), destination: ToccataReleaseSource.releasesURL)
+                        }
+                    }
+                    .controlSize(.regular)
                 }
-                .controlSize(.regular)
+                .padding(16)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
+                Text(L10n.tr("从 GitHub 下载并校验更新，点击“安装并重启”完成更新。"))
+                    .font(.caption).foregroundStyle(.secondary)
             }
-            .padding(16)
-            .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
-            Text(L10n.tr("从 GitHub 下载并校验更新，点击“安装并重启”完成更新。"))
-                .font(.caption).foregroundStyle(.secondary)
         }
         .padding(28)
         .frame(width: 390)

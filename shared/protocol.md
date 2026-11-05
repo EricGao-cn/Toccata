@@ -241,6 +241,8 @@ CREATE INDEX IF NOT EXISTS progress_task ON task_progress(task_id, created_at);
 
 ### 后台服务配置
 
+个人稳定分发使用独立编译入口：Studio 和 `personal-distribution` feature 的 helper 都固定在 `Toccata-Personal` 数据命名空间，不采用旧环境变量或配置文件中的外部数据库/socket 路径。运行时拒绝符号链接、关键文件硬链接和维护 pending 标记；中断安装/回滚须先使用 `recover` 处理，不打开可能不匹配的 App/数据对。迁移工具仅在新副本中重写配置。个人候选 Studio 使用工作树的独立候选目录，禁用 helper 启动及输入监控请求；不允许候选数据与个人稳定数据共用。上游及普通开发构建继续遵循本协议原有路径优先级。
+
 `config.json` 全部字段可省略：
 
 ```json

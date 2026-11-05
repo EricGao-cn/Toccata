@@ -27,7 +27,7 @@ struct AppVersion: Decodable, Equatable {
             .flatMap { try? JSONDecoder().decode(AppBuildInfo.self, from: $0) }
         if let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
            let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String,
-           Bundle.main.bundleIdentifier == "com.toccata.studio" {
+           (Bundle.main.bundleIdentifier == "com.toccata.studio" || PersonalDistribution.isPersonal) {
             return AppVersion(version: version, build: build, buildInfo: buildInfo)
         }
         // SwiftPM launches do not have the app's Info.plist.

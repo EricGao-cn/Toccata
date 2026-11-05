@@ -30,6 +30,7 @@ struct UpdatePackage: Equatable {
 }
 
 enum UpdateCheckFailure: Error, Equatable {
+    case personalManualUpdates
     case noAccessibleRelease
     case rateLimited
     case invalidResponse
@@ -37,6 +38,7 @@ enum UpdateCheckFailure: Error, Equatable {
 
     var title: String {
         switch self {
+        case .personalManualUpdates: return L10n.tr("个人版采用手动更新")
         case .noAccessibleRelease: return L10n.tr("尚无可访问的正式版本")
         case .rateLimited: return L10n.tr("检查过于频繁，请稍后重试")
         case .invalidResponse: return L10n.tr("暂时无法读取版本信息")
@@ -46,6 +48,7 @@ enum UpdateCheckFailure: Error, Equatable {
 
     var detail: String {
         switch self {
+        case .personalManualUpdates: return L10n.tr("请使用个人版安装包更新；安装前备份应用和数据。")
         case .noAccessibleRelease: return L10n.tr("可能尚未发布，或仓库仍为私有。可在 GitHub 登录后查看。")
         case .rateLimited: return L10n.tr("GitHub 暂时限制了请求次数。你也可以直接查看发布页面。")
         case .invalidResponse: return L10n.tr("发布信息暂不可用，请稍后重试或查看发布页面。")
@@ -81,6 +84,7 @@ struct ReleaseUpdateService {
     }
 
     func check(current: AppVersion, architecture: String = UpdatePackage.architecture) async throws -> AvailableUpdate? {
+        guard !PersonalDistribution.isPersonal else { throw UpdateCheckFailure.personalManualUpdates }
         guard let installed = ReleaseVersion(current.version) else { throw UpdateCheckFailure.invalidResponse }
         var request = URLRequest(url: ToccataReleaseSource.latestAPIURL)
         request.cachePolicy = .reloadIgnoringLocalCacheData
