@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "version": "1.0.0",
-  "build": "1",
+  "version": "1.1.0",
+  "build": "2",
   "bundle_id": "cn.ericgao.toccata.personal",
   "app_name": "Toccata Personal",
   "data_directory_name": "Toccata-Personal",

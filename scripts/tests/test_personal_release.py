@@ -447,6 +447,7 @@ class PersonalReleaseTests(unittest.TestCase):
 
     def test_stable_packaging_requires_clean_fixed_tag_and_accepted_commit(self):
         settings = release.config()
+        settings['version'] = '1.0.0'  # Test provenance rules independently of the next release version.
         with mock.patch.object(release, 'git', return_value=' M changed'):
             with self.assertRaises(release.ReleaseError): release.release_provenance(settings, 'personal-v1.0.0')
         with self.assertRaises(release.ReleaseError): release.release_provenance(settings, 'v0.1.4')

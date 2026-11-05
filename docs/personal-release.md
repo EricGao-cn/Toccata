@@ -2,14 +2,14 @@
 
 ## 当前阶段和身份
 
-这是本地手动发布流程。首次个人版本暂定 `1.0.0 / build 1`，基于上游 `v0.1.4`；发布前仍可调整。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
+个人版本基于上游 `v0.1.4`，通过个人 GitHub Release 分发，本机手动安装。已保留的 `personal-v1.0.0` 标签和安装包不移动、不覆盖；本轮开发版本为 `1.1.0 / build 2`，须验收并获得授权后才能提交、打新标签和发布。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
 
 | 类型 | Bundle ID | 数据目录 | 采集与更新 |
 | --- | --- | --- | --- |
 | 上游日用版 | `com.toccata.studio` | `~/Library/Application Support/Toccata/` | 沿用上游 |
 | 隔离开发版 | `cn.ericgao.toccata.dev.<worktree-id>` | 各工作树的独立测试目录 | task-only，沿用开发入口 |
-| 个人候选包 | 开发身份再加 `.candidate` | 当前工作树测试目录下的 `personal-candidate/` | 不启动采集、不请求输入监控、禁用在线安装更新 |
-| 个人稳定版 | `cn.ericgao.toccata.personal` | `~/Library/Application Support/Toccata-Personal/` | 独立个人采集服务、手动更新 |
+| 个人候选包 | 开发身份再加 `.candidate` | 当前工作树测试目录下的 `personal-candidate/` | 不启动采集、不请求输入监控；可手动检查个人发布，不能应用内安装 |
+| 个人稳定版 | `cn.ericgao.toccata.personal` | `~/Library/Application Support/Toccata-Personal/` | 独立个人采集服务；检查个人 GitHub 发布，手动下载安装 |
 
 默认安装位置为 `~/Applications/Toccata Personal.app`。上游 `/Applications/Toccata.app` 保留原样。个人编译入口固定 SDK 26.2，不放宽上游 SDK 26.5 guard；正式包记录实际 SDK、架构、提交、个人 Tag 和上游基线。
 
@@ -44,13 +44,58 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/candidate-direct
 4. 再执行正式构建：
 
 ```bash
-python3 -B scripts/personal/release.py build-release --tag personal-v1.0.0
-python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.0.0
+python3 -B scripts/personal/release.py build-release --tag personal-v1.1.0
+python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.1.0
 ```
 
 源码不干净、Tag 与 HEAD 不一致、不是 annotated Tag、提交未纳入个人主线、上游 Tag 与固定 SHA 不一致时，正式构建拒绝执行。不会自动提交、打 Tag、推送、发布、安装或启动。正式输出目录已存在时拒绝覆盖。
 
-## 首次切换：先快照，再副本验证
+## 个人 GitHub Release：本地准备、草稿、人工发布
+
+固定更新源为 `EricGao-cn/Toccata`。个人版在“关于 Toccata → 个人版更新”中手动检查 `personal-vX.Y.Z` 正式发布，并提供“打开下载页”。仅打开关于窗口不联网；不会下载、解压或安装更新，也不会上传任务、日记和键盘记录。不使用仓库的通用 latest 标记，按数值比较个人标签，排除上游标签、草稿、预览版和非法版本。列表分页最多 10 页；读取不完整时显示失败，不误报已是最新。
+
+当前客户端匿名检查公开发布。私有仓库、尚无个人正式发布、限流或网络失败均显示可重试的状态；可用发布页面入口在浏览器登录查看，不向 App 写入 GitHub token。普通上游构建继续使用原上游更新流程。
+
+下面是**未来得到相应授权后**的发布步骤，本地准备不会隐式推送或发布：
+
+1. 验收并合入 `codex/personal`，为干净提交创建新的固定 annotated 标签，再生成并验证正式包。候选包不能发布为稳定版。
+2. 使用独立入口准备发布素材：
+
+```bash
+python3 -B scripts/personal/publish.py prepare \
+  --package /absolute/path/to/personal-v1.1.0 \
+  --notes docs/releases/personal-v1.1.0.md \
+  --output /absolute/path/to/new-github-release-bundle
+python3 -B scripts/personal/publish.py plan \
+  --bundle /absolute/path/to/new-github-release-bundle
+```
+
+准备入口读取已验证正式包、固定标签和个人主线包含关系；只打包白名单中的 App、包内发布清单及其校验值，不收集包旁边的开发数据或运行目录。输出包括 `Toccata-Personal-<version>-<arch>.zip`、SHA-256、清单和说明。ZIP 会重新解压并验证签名、内容和执行权限。已有输出拒绝覆盖。
+
+3. **另行授权**后将个人分支和固定标签推送到自己的仓库。本工具不执行 push，也不在远端自动创建标签。
+4. **获得上传授权**后创建 GitHub 草稿。默认仍只输出计划，实际上传要求两个执行标记：
+
+```bash
+python3 -B scripts/personal/publish.py create-draft \
+  --bundle /absolute/path/to/new-github-release-bundle
+# 获准上传后追加：--execute --ack-upload
+```
+
+上传入口固定仓库、核对远端 annotated 标签对象与提交、拒绝覆盖已有正式发布或草稿，再用 `gh release create --draft --verify-tag` 上传。联网前会复制并重新验证私有上传快照，上传只读取该快照，避免等待期间源文件的编辑混入。ZIP 的顶层内容必须是 App 和两个清单文件，归档名称中的架构须与包清单一致。GitHub CLI 需预先认证；接口失败或标签不匹配时拒绝写入。不自动发布、替换或删除草稿；上传失败时保留原素材目录与远端现场，先在 GitHub 检查，不盲目重试覆盖。
+
+5. 在 GitHub 草稿中人工核对版本、说明、ZIP 和校验值，**另行授权发布**后点击 Publish release，保持为正式版本。App 随后才能检测到它。历史版本和标签保留。
+
+从发布页下载的是安装包 ZIP（不是 GitHub 自动提供的源码 ZIP）。解压后含 `Toccata Personal.app` 和配套 `release.json`；继续使用下述离线备份、迁移及安装入口。GitHub 分发不替代数据备份，首次接管上游数据仍须专门验证；本轮不实现一键安装。当前包为 ad-hoc 签名，实际下载后的系统放行体验留待获准安装时验证。
+
+## 当前首次使用方案：全新个人数据，不迁移
+
+按当前使用决定，首次个人版安装采用全新的 `Toccata-Personal` 数据目录，不迁移上游任务、键盘历史或开发试用数据。原版 App、原数据和已做的备份保留，不删除、不重置。
+
+本轮只实现和隔离验证，不实际安装。后续获准安装时，正常退出原版及 helper，将经过验证的个人 App 放到 `~/Applications/Toccata Personal.app`，核对个人目标目录原本不存在，再首次启动建立空数据库。若目标已有 App 或数据，先核对其来源，不能通过清空目录来强行按全新安装处理。两套采集服务不同时运行，输入监控等系统权限由用户确认。
+
+下载检查不依赖迁移。以下迁移与成对安装流程作为可选维护能力保留，当前首次安装不以迁移演练为前置条件；今后个人版自身更新仍须备份已有数据。
+
+## 可选迁移：先快照，再副本验证
 
 以下为**未来正式迁移时的操作说明**，本轮不执行。所有 `backup`、`stage-migration`、`install`、`rollback` 命令默认只输出计划；真正执行必须显式追加 `--execute --ack-stopped`，并先完成该阶段的用户授权。脚本不会替用户退出程序、停止服务、修改系统权限或启动应用。
 
@@ -105,7 +150,7 @@ python3 -B scripts/personal/maintenance.py stage-migration \
 
 ```bash
 python3 -B scripts/personal/maintenance.py install \
-  --package /absolute/path/to/extracted/personal-v1.0.0 \
+  --package /absolute/path/to/extracted/personal-v1.1.0 \
   --staged-data /absolute/path/to/new-staging-data \
   --backup "$HOME/Toccata-Backups/personal-before-install"
 ```

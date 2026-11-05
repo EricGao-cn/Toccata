@@ -4,10 +4,11 @@ import Foundation
 import Security
 
 enum UpdateInstallFailure: Error {
-    case location, integrity, package, incompatible, installer, save
+    case location, integrity, package, incompatible, installer, save, personalManualUpdates
 
     var message: String {
         switch self {
+        case .personalManualUpdates: return L10n.tr("个人版采用手动更新")
         case .location: return L10n.tr("请先将 Toccata 移到可写的应用程序文件夹，再使用应用内更新。")
         case .integrity: return L10n.tr("安装包校验未通过，原应用未改动。请重新下载。")
         case .package: return L10n.tr("安装包无效或不属于 Toccata，原应用未改动。")
@@ -27,6 +28,7 @@ struct PreparedAppUpdate: Codable, Equatable {
     let version: String
 
     static func cleanUpSuccessfulInstallation(arguments: [String] = CommandLine.arguments, target: URL = Bundle.main.bundleURL) {
+        guard !PersonalDistribution.isPersonal else { return }
         guard let index = arguments.firstIndex(of: "--toccata-updated"), arguments.indices.contains(index + 1) else { return }
         let directory = URL(fileURLWithPath: arguments[index + 1]).standardizedFileURL
         let temporary = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
@@ -55,6 +57,7 @@ struct PreparedAppUpdate: Codable, Equatable {
     }
 
     func startInstaller() async throws {
+        guard !PersonalDistribution.isPersonal else { throw UpdateInstallFailure.personalManualUpdates }
         let worker = Task.detached(priority: .userInitiated) {
             let script = directory.appendingPathComponent("install-update.sh")
             let ready = directory.appendingPathComponent("ready")
@@ -87,6 +90,7 @@ struct UpdatePackagePreparer {
     init(target: URL = Bundle.main.bundleURL) { self.target = target }
 
     func prepare(_ update: AvailableUpdate, progress: @escaping @Sendable (Double?) -> Void) async throws -> PreparedAppUpdate {
+        guard !PersonalDistribution.isPersonal else { throw UpdateInstallFailure.personalManualUpdates }
         guard let package = update.package else { throw UpdateInstallFailure.package }
         try Self.checkLocation(target)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ToccataUpdate-\(UUID())", isDirectory: true)

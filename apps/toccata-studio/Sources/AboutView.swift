@@ -69,7 +69,10 @@ struct AboutView: View {
                     Image(nsImage: icon).resizable().frame(width: 80, height: 80)
                         .accessibilityHidden(true)
                 }
-                Text("Toccata").font(.system(size: 26, weight: .bold))
+                Text(PersonalDistribution.isPersonal ? "Toccata Personal" : "Toccata").font(.system(size: 26, weight: .bold))
+                if PersonalDistribution.isCandidate {
+                    Text(L10n.tr("隔离候选版")).font(.caption).foregroundStyle(.secondary)
+                }
                 Text(L10n.tr("记下想法，看见投入")).foregroundStyle(.secondary)
                 HStack(spacing: 8) {
                     Text(version.displayVersion)
@@ -128,11 +131,33 @@ struct AboutView: View {
             .background(Color.accentColor.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
 
             if PersonalDistribution.isPersonal {
-                VStack(alignment: .leading, spacing: 8) {
-                    Label(L10n.tr("个人版采用手动更新"), systemImage: "shippingbox").font(.headline)
-                    Text(L10n.tr("请使用个人版安装包更新；安装前备份应用和数据。"))
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Label(L10n.tr("个人版更新"), systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                        Spacer()
+                        if checker.state == .checking { ProgressView().controlSize(.small) }
+                    }
+                    updateStatus.frame(maxWidth: .infinity, minHeight: 78, alignment: .topLeading)
+                    HStack {
+                        Button(checker.state == .checking ? L10n.tr("正在检查…") : L10n.tr("检查更新")) {
+                            Task { await checker.check() }
+                        }
+                        .buttonStyle(.borderedProminent).disabled(checker.state == .checking)
+                        .accessibilityIdentifier("personal-check-updates")
+                        Spacer()
+                        if case let .available(update) = checker.state {
+                            Link(L10n.tr("打开下载页 ↗"), destination: update.pageURL)
+                                .accessibilityIdentifier("personal-release-download-page")
+                        } else {
+                            Link(L10n.tr("发布页面 ↗"), destination: ToccataReleaseSource.releasesURL)
+                                .accessibilityIdentifier("personal-release-page")
+                        }
+                    }
+                    Text(L10n.tr("从个人 GitHub 仓库检查版本，在发布页下载；安装前请备份应用和数据。"))
                         .font(.caption).foregroundStyle(.secondary)
-                }.padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 14))
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
@@ -175,7 +200,9 @@ struct AboutView: View {
             switch checker.state {
             case .idle:
                 Text(L10n.tr("查看是否有新版本")).fontWeight(.medium)
-                Text(L10n.tr("点击检查，获取最新的正式发布版本。"))
+                Text(PersonalDistribution.isPersonal
+                     ? L10n.tr("仅检查个人版正式发布，不包含上游版本或预览版。")
+                     : L10n.tr("点击检查，获取最新的正式发布版本。"))
                     .font(.callout).foregroundStyle(.secondary)
             case .checking:
                 Text(L10n.tr("正在连接 GitHub…")).fontWeight(.medium)
@@ -185,9 +212,11 @@ struct AboutView: View {
                 Text(L10n.tr("当前版本 \(version.displayVersion)")).font(.callout).foregroundStyle(.secondary)
             case let .available(update):
                 Text(L10n.tr("发现新版本 v\(update.version)")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
-                Text(update.package == nil
-                     ? L10n.tr("此版本暂无可自动安装的兼容安装包，请查看发布页面。")
-                     : L10n.tr("可在这里下载更新，完成后安装并重启。"))
+                Text(PersonalDistribution.isPersonal
+                     ? L10n.tr("打开个人版下载页，查看更新说明和安装包。")
+                     : (update.package == nil
+                        ? L10n.tr("此版本暂无可自动安装的兼容安装包，请查看发布页面。")
+                        : L10n.tr("可在这里下载更新，完成后安装并重启。")))
                     .font(.callout).foregroundStyle(.secondary)
             case let .failed(error):
                 Text(error.title).fontWeight(.medium)

@@ -178,6 +178,7 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
     }
 
     func installUpdate(start: @escaping () async throws -> Void, failed: @escaping (Error) -> Void) {
+        guard !PersonalDistribution.isPersonal else { failed(UpdateInstallFailure.personalManualUpdates); return }
         guard !isQuitting, updateInstallation == nil else { failed(UpdateInstallFailure.save); return }
         updateInstallation = (start, failed)
         NSApp.terminate(nil)

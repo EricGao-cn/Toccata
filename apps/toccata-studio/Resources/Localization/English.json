@@ -577,5 +577,11 @@
   "，有记录": ", has an entry",
   "复制所选时段的全部记录和任务，不应用任务搜索。": "Copy all notes and tasks in the selected period, without the task search filter.",
   "个人版采用手动更新": "Personal builds use manual updates",
-  "请使用个人版安装包更新；安装前备份应用和数据。": "Update using a personal package. Back up the app and data before installing."
+  "请使用个人版安装包更新；安装前备份应用和数据。": "Update using a personal package. Back up the app and data before installing.",
+  "隔离候选版": "Isolated candidate",
+  "个人版更新": "Personal updates",
+  "打开下载页 ↗": "Open download page ↗",
+  "从个人 GitHub 仓库检查版本，在发布页下载；安装前请备份应用和数据。": "Check the personal GitHub repository for updates and download from its release page. Back up the app and data before installing.",
+  "仅检查个人版正式发布，不包含上游版本或预览版。": "Check personal stable releases only, excluding upstream and preview versions.",
+  "打开个人版下载页，查看更新说明和安装包。": "Open the personal release page for release notes and downloads."
 }
