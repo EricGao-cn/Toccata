@@ -10,7 +10,7 @@ struct QuickCaptureView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var page: MenuPanelPage { presentation.page }
     @State private var scope: MenuTaskScope = .thisWeek
-    @State private var sortOrder: MenuTaskSortOrder = .createdDescending
+    @AppStorage(TaskSortOrder.storageKey) private var sortOrder: TaskSortOrder = .createdDescending
     @State private var title = ""
     @State private var taskToDelete: TodoTask?
     @State private var hoveredTaskID: String?
@@ -146,22 +146,7 @@ struct QuickCaptureView: View {
 
             Spacer()
             if page == .tasks {
-                Menu {
-                    Picker(L10n.tr("排序"), selection: $sortOrder) {
-                        ForEach(MenuTaskSortOrder.allCases) { order in Text(L10n.key(order.rawValue)).tag(order) }
-                    }
-                    .pickerStyle(.inline)
-                    .id(interfaceLanguage.language)
-                } label: {
-                    Image(systemName: "arrow.up.arrow.down")
-                        .font(.system(size: 14))
-                        .foregroundStyle(TaskMenuStyle.primary)
-                        .frame(width: 18, height: 28)
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel(L10n.tr("任务排序"))
+                TaskSortPicker(selection: $sortOrder, menuStyle: true)
             }
         }
         .padding(.horizontal, 16)
@@ -225,6 +210,9 @@ struct QuickCaptureView: View {
                     .animation(reduceMotion ? nil : WorkspaceMotion.branchChange,
                                value: presentation.expandedTaskIDs)
                     .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder, value: sortOrder)
+                    // Animate pin changes even when they originate in another window.
+                    .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder,
+                               value: Set(tasks.tasks.filter { $0.parentID == nil && $0.isPinned }.map(\.id)))
                 }
                 .scrollIndicators(.visible)
                 .background(TaskScrollerStyle())
@@ -275,7 +263,8 @@ struct QuickCaptureView: View {
             SubtaskDragHandle(task: task)
         }
         .padding(.leading, 23 + indentation)
-        .padding(.trailing, 18)
+        // The grip already has a generous hit area; the scrollbar owns its gutter.
+        .padding(.trailing, 4)
         .frame(height: 32)
         .overlay(alignment: .leading) {
             if !row.node.children.isEmpty {
@@ -312,6 +301,12 @@ struct QuickCaptureView: View {
 
     @ViewBuilder
     private func taskMetadata(_ task: TodoTask) -> some View {
+        if task.parentID == nil, task.isPinned {
+            Image(systemName: "pin.fill")
+                .font(.system(size: 10))
+                .foregroundStyle(TaskMenuStyle.accent)
+                .accessibilityLabel(L10n.tr("已置顶"))
+        }
         if let date = task.plannedDate {
             HStack(spacing: 3) {
                 Image(systemName: "calendar").font(.system(size: 9))
@@ -382,10 +377,22 @@ struct QuickCaptureView: View {
             Label(task.isCompleted ? L10n.tr("恢复为待办") : L10n.tr("标记完成"),
                   systemImage: task.isCompleted ? "arrow.uturn.backward" : "checkmark.circle")
         }
+        Button {
+            _ = tasks.setPinned(id: task.id, pinned: !tasks.isPinned(id: task.id))
+        } label: {
+            Label(pinActionTitle(for: task), systemImage: tasks.isPinned(id: task.id) ? "pin.slash" : "pin")
+        }
         Divider()
         Button(role: .destructive) { taskToDelete = task } label: {
             Label(L10n.tr("删除任务…"), systemImage: "trash")
         }
+    }
+
+    private func pinActionTitle(for task: TodoTask) -> String {
+        if task.parentID != nil {
+            return tasks.isPinned(id: task.id) ? L10n.tr("取消主任务置顶") : L10n.tr("置顶主任务")
+        }
+        return tasks.isPinned(id: task.id) ? L10n.tr("取消置顶") : L10n.tr("置顶任务")
     }
 
     private func selectTask(_ id: String, focus: MenuEditorField? = nil) {
@@ -427,25 +434,9 @@ struct QuickCaptureView: View {
         }
     }
 
-    private func sorted(_ nodes: [MenuTaskTreeNode]) -> [MenuTaskTreeNode] {
-        nodes.sorted { lhs, rhs in
-            if lhs.task.isCompleted != rhs.task.isCompleted { return !lhs.task.isCompleted }
-            switch sortOrder {
-            case .createdDescending:
-                if lhs.task.createdAt != rhs.task.createdAt { return lhs.task.createdAt > rhs.task.createdAt }
-            case .createdAscending:
-                if lhs.task.createdAt != rhs.task.createdAt { return lhs.task.createdAt < rhs.task.createdAt }
-            case .title:
-                let comparison = lhs.task.title.localizedStandardCompare(rhs.task.title)
-                if comparison != .orderedSame { return comparison == .orderedAscending }
-            }
-            return lhs.id < rhs.id
-        }
-    }
-
     private func flatten(_ roots: [MenuTaskTreeNode], depth: Int = 0) -> [MenuTaskVisibleRow] {
         // Header sorting affects roots only; children keep their saved sibling order.
-        (depth == 0 ? sorted(roots) : roots).flatMap { node in
+        (depth == 0 ? TaskOrder.sortedRoots(roots, sortOrder: sortOrder) : roots).flatMap { node in
             let row = MenuTaskVisibleRow(node: node, depth: depth)
             return [row] + (presentation.expandedTaskIDs.contains(node.task.id)
                 ? flatten(node.children, depth: depth + 1) : [])
@@ -491,13 +482,6 @@ struct QuickCaptureView: View {
             captureFocused = true
         }
     }
-}
-
-private enum MenuTaskSortOrder: String, CaseIterable, Identifiable {
-    case createdDescending = "创建时间：从新到旧"
-    case createdAscending = "创建时间：从旧到新"
-    case title = "任务名称"
-    var id: String { rawValue }
 }
 
 private struct MenuTaskVisibleRow: Identifiable {

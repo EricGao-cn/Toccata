@@ -52,4 +52,20 @@ final class MenuBarSettingsTests: XCTestCase {
         addTeardownBlock { defaults.removePersistentDomain(forName: name) }
         return defaults
     }
+
+    func testEveryMenuPageOpensItsMatchingWorkbenchSectionIncludingDailyNotes() throws {
+        let presentation = MenuTaskPresentation(settings: MenuBarSettings(defaults: try fixture()))
+        var destination: WorkspaceSection?
+        presentation.onOpenWorkbench = { destination = $0 }
+        let routes: [(MenuPanelPage, WorkspaceSection)] = [
+            (.tasks, .tasks), (.calendar, .taskCalendar),
+            (.dailyNotes, .dailyNotes), (.activity, .activity)
+        ]
+        XCTAssertEqual(routes.count, MenuPanelPage.allCases.count)
+        for (page, expected) in routes {
+            presentation.page = page
+            presentation.openWorkbench()
+            XCTAssertEqual(destination, expected)
+        }
+    }
 }

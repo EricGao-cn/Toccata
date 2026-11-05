@@ -5,6 +5,15 @@ enum MenuPanelPage: String, CaseIterable, Identifiable {
     case tasks, calendar, dailyNotes, activity
 
     var id: String { rawValue }
+    var workbenchSection: WorkspaceSection {
+        switch self {
+        case .tasks: return .tasks
+        case .calendar: return .taskCalendar
+        case .dailyNotes: return .dailyNotes
+        case .activity: return .activity
+        }
+    }
+
     var title: String {
         switch self {
         case .tasks: return L10n.tr("任务管理")

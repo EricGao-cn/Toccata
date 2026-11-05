@@ -38,6 +38,7 @@ struct TasksView: View {
     @State private var referenceDate = Date()
     @State private var collapsedTaskIDs: Set<String> = []
     @State private var hoveredTaskID: String?
+    @AppStorage(TaskSortOrder.storageKey) private var sortOrder: TaskSortOrder = .createdDescending
     @AppStorage("tasks.listDisplayMode") private var displayMode: TaskListDisplayMode = .titles
     @FocusState private var addingTask: Bool
     @FocusState private var taskListFocused: Bool
@@ -167,6 +168,7 @@ struct TasksView: View {
                 HStack(spacing: 8) {
                     searchField
                     TaskListDisplayModePicker(selection: $displayMode)
+                    TaskSortPicker(selection: $sortOrder)
                 }
             }
             .padding(22)
@@ -176,17 +178,17 @@ struct TasksView: View {
                 if let review {
                     reviewList(review)
                         .id(reviewRange)
-                        .transition(WorkspaceMotion.pageTransition)
+                        .transition(reduceMotion ? .opacity : WorkspaceMotion.pageTransition)
                 } else {
                     inboxList
                         .id(taskScope)
-                        .transition(WorkspaceMotion.pageTransition)
+                        .transition(reduceMotion ? .opacity : WorkspaceMotion.pageTransition)
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .clipped()
-            .animation(reduceMotion ? nil : WorkspaceMotion.pageChange, value: taskPeriod)
-            .animation(reduceMotion ? nil : WorkspaceMotion.pageChange, value: reviewRange)
+            .animation(reduceMotion ? WorkspaceMotion.sidebarSelectionFade : WorkspaceMotion.pageChange, value: taskPeriod)
+            .animation(reduceMotion ? WorkspaceMotion.sidebarSelectionFade : WorkspaceMotion.pageChange, value: reviewRange)
 
             Divider()
             HStack(spacing: 5) {
@@ -203,72 +205,53 @@ struct TasksView: View {
     }
 
     private func periodPicker(_ title: String, selection: Binding<TaskReviewPeriod>) -> some View {
-        Picker(title, selection: selection) {
-            ForEach(TaskReviewPeriod.allCases) { period in
-                Text(period == .thisWeek ? L10n.tr("本周") : L10n.tr("最近 7 天")).tag(period)
-            }
+        WorkspaceSegmentedControl(title: title, selection: selection, options: TaskReviewPeriod.allCases) { period in
+            period == .thisWeek ? L10n.tr("本周") : L10n.tr("最近 7 天")
         }
-        .labelsHidden()
-        .pickerStyle(.segmented)
-        // Rebuild only the native control: AppKit caches segment titles. The binding stays intact.
-        .id(interfaceLanguage.language)
     }
 
     private var reviewRangeControl: some View {
-        HStack(spacing: 2) {
-            ForEach(TaskReviewPeriod.allCases) { period in
-                Button {
-                    reviewRange = .preset(period)
-                } label: {
-                    reviewRangeLabel(period == .thisWeek ? L10n.tr("本周") : L10n.tr("最近 7 天"),
-                                     selected: reviewRange == .preset(period))
-                }
-                .accessibilityValue(reviewRange == .preset(period) ? L10n.tr("已选择") : L10n.tr("未选择"))
+        WorkspaceSegmentedControl(
+            title: L10n.tr("回顾范围"), selection: reviewRangeSelection,
+            options: TaskReviewPeriod.allCases.map(ReviewRangeOption.preset) + [.custom],
+            optionSymbol: { $0 == .custom ? "calendar" : nil }
+        ) { option in
+            switch option {
+            case .preset(let period): return period == .thisWeek ? L10n.tr("本周") : L10n.tr("最近 7 天")
+            case .custom: return L10n.tr("自定义时段")
             }
-            Button {
+        }
+        .popover(isPresented: $showsCustomReviewRange, arrowEdge: .bottom) {
+            CalendarDateRangePicker(
+                initialRange: reviewRange.dateRange(relativeTo: referenceDate),
+                referenceDate: referenceDate,
+                onCancel: { showsCustomReviewRange = false },
+                onApply: { selected in
+                    reviewRange = .custom(selected)
+                    showsCustomReviewRange = false
+                }
+            )
+        }
+    }
+
+    private enum ReviewRangeOption: Hashable {
+        case preset(TaskReviewPeriod)
+        case custom
+    }
+
+    private var reviewRangeSelection: Binding<ReviewRangeOption> {
+        Binding(get: {
+            if case .preset(let period) = reviewRange { return .preset(period) }
+            return .custom
+        }, set: { option in
+            switch option {
+            case .preset(let period): reviewRange = .preset(period)
+            case .custom:
+                // Keep the active range until Apply, including when reopening a custom range.
                 referenceDate = Date()
                 showsCustomReviewRange = true
-            } label: {
-                reviewRangeLabel(L10n.tr("自定义时段"), selected: isCustomReviewRange, symbol: "calendar")
             }
-            .accessibilityValue(isCustomReviewRange ? L10n.tr("已选择") : L10n.tr("未选择"))
-            .help(L10n.tr("在日历中选择开始和结束日期"))
-            .popover(isPresented: $showsCustomReviewRange, arrowEdge: .bottom) {
-                CalendarDateRangePicker(
-                    initialRange: reviewRange.dateRange(relativeTo: referenceDate),
-                    referenceDate: referenceDate,
-                    onCancel: { showsCustomReviewRange = false },
-                    onApply: { selected in
-                        reviewRange = .custom(selected)
-                        showsCustomReviewRange = false
-                    }
-                )
-            }
-        }
-        .buttonStyle(.plain)
-        .padding(3)
-        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 8))
-        .fixedSize(horizontal: true, vertical: false)
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel(L10n.tr("回顾范围"))
-    }
-
-    private var isCustomReviewRange: Bool {
-        if case .custom = reviewRange { return true }
-        return false
-    }
-
-    private func reviewRangeLabel(_ title: String, selected: Bool, symbol: String? = nil) -> some View {
-        HStack(spacing: 5) {
-            if let symbol { Image(systemName: symbol) }
-            Text(title)
-        }
-        .font(.system(size: 12, weight: selected ? .semibold : .medium))
-        .padding(.horizontal, 10)
-        .frame(height: 26)
-        .foregroundStyle(selected ? Color.white : Color.primary)
-        .background(selected ? Color.accentColor : Color.clear, in: RoundedRectangle(cornerRadius: 6))
-        .contentShape(Rectangle())
+        })
     }
 
     private var canAddTask: Bool { !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
@@ -327,7 +310,7 @@ struct TasksView: View {
     private var inboxList: some View {
         let scoped = scopedTasks
         let snapshot = WorkspaceTaskListSnapshot(allTasks: store.tasks, scopedTasks: scoped,
-            includeAllDescendants: mode == .inbox, query: query)
+            includeAllDescendants: mode == .inbox, query: query, sortOrder: sortOrder)
         // Search always reveals matching descendants, even inside a folded branch.
         let collapsed = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? collapsedTaskIDs : []
         let pendingRows = WorkspaceTaskListSnapshot.rows(from: snapshot.pendingRoots, collapsedIDs: collapsed)
@@ -361,14 +344,13 @@ struct TasksView: View {
             }
         )
         .taskContextMenu(task: row.task) { selection = row.id }
-        .subtaskReordering(task: row.task)
     }
 
     @ViewBuilder
     private func reviewList(_ review: TaskReviewSnapshot) -> some View {
         let collapsed = query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? collapsedTaskIDs : []
-        let completedRows = WorkspaceTaskListSnapshot.rows(from: review.completedRoots, collapsedIDs: collapsed)
-        let pendingRows = WorkspaceTaskListSnapshot.rows(from: review.pendingRoots, collapsedIDs: collapsed)
+        let completedRows = WorkspaceTaskListSnapshot.rows(from: TaskOrder.sortedRoots(review.completedRoots, sortOrder: sortOrder), collapsedIDs: collapsed)
+        let pendingRows = WorkspaceTaskListSnapshot.rows(from: TaskOrder.sortedRoots(review.pendingRoots, sortOrder: sortOrder), collapsedIDs: collapsed)
         if review.tasks.isEmpty {
             TaskPlaceholder(
                 symbol: query.isEmpty ? "doc.text" : "magnifyingglass",
@@ -461,6 +443,10 @@ struct TasksView: View {
                 .animation(reduceMotion ? nil : WorkspaceMotion.branchChange, value: collapsedTaskIDs)
                 .animation(reduceMotion ? nil : WorkspaceMotion.branchChange, value: showsCompleted)
                 .animation(reduceMotion ? nil : WorkspaceMotion.pageChange, value: displayMode)
+                .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder, value: sortOrder)
+                // Animate pin changes even when they originate in another window.
+                .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder,
+                           value: Set(store.tasks.filter { $0.parentID == nil && $0.isPinned }.map(\.id)))
             }
             .focusable()
             .focused($taskListFocused)
@@ -511,6 +497,7 @@ struct TasksView: View {
                 .padding(.leading, 44 + CGFloat(row.depth) * 26)
                 .padding(.trailing, 12)
         }
+        .subtaskReordering(task: row.task)
         .transition(reduceMotion ? .identity : WorkspaceMotion.branchTransition)
     }
 

@@ -12,8 +12,16 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
     private let taskMenu = TaskMenuController()
     private let coreProcess = CoreProcessController()
     private let refresher = LiveRefresher()
-    private let aboutWindow = AboutWindowController()
+    // SwiftUI owns NSApp.delegate and forwards to this adapted delegate.
+    // Pass the real lifecycle owner explicitly instead of casting that proxy.
+    private lazy var aboutWindow = AboutWindowController(install: { [weak self] prepared, failed in
+        guard let self else { failed(UpdateInstallFailure.installer); return }
+        self.installUpdate(start: {
+            try await prepared.startInstaller()
+        }, failed: failed)
+    })
     private let hydrationWindow = HydrationReminderWindowController()
+    private let workbenchNavigation = WorkbenchNavigation()
     private var workbench: NSWindow?
     private var healthTimer: Timer?
     private var wakeObserver: NSObjectProtocol?
@@ -34,8 +42,8 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
             self?.openHydrationSettings()
         }, openAbout: { [weak self] in
             self?.openAbout()
-        }) { [weak self] in
-            self?.openWorkbench()
+        }) { [weak self] section in
+            self?.openWorkbench(section: section)
         }
         dockIcon.applySavedPreference()
         refresher.start()
@@ -75,10 +83,12 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
         aboutWindow.show()
     }
 
-    func openWorkbench() {
+    func openWorkbench(section: WorkspaceSection? = nil) {
         guard !isQuitting else { return }
+        if let section { workbenchNavigation.requestedSection = section.rawValue }
         if workbench == nil {
-            let content = ContentView(openAbout: { [weak self] in self?.openAbout() })
+            let content = WorkbenchRootView(navigation: workbenchNavigation,
+                                            openAbout: { [weak self] in self?.openAbout() })
                 .environmentObject(refresher)
                 .environmentObject(taskStore)
                 .environmentObject(appearance)
