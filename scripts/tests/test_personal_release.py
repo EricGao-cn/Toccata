@@ -1,4 +1,5 @@
 """Rehearse packaging guards, offline SQLite backups and paired install/rollback on fixtures."""
+from contextlib import closing
 import json
 import fcntl
 import os
@@ -116,9 +117,215 @@ class PersonalReleaseTests(unittest.TestCase):
         maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
         self.assertEqual(self.details(backup / 'data'), 'WAL committed row')
         self.assertFalse((backup / 'data/tasks.sqlite-wal').exists())
+        self.assertFalse((backup / 'data/tasks.sqlite-shm').exists())
         self.assertEqual((backup / 'data/daily-notes/2026-11-05.md').read_bytes(), (self.data / 'daily-notes/2026-11-05.md').read_bytes())
         self.assertEqual(maintenance.verify_snapshot(backup)['sqlite_inventory']['tasks.sqlite'], {'tasks': 1})
         self.check_stopped.assert_called_once_with(self.app, self.data)
+
+    def test_all_application_wal_databases_produce_installable_standalone_staging(self):
+        self.make_app(self.app)
+        self.make_data(self.data, 'latest committed task', wal=True)
+        for name in ['toccata.db', 'toccata.statistics-cache.sqlite']:
+            connection = sqlite3.connect(self.data / name)
+            self.addCleanup(connection.close)
+            connection.execute('PRAGMA journal_mode=WAL').fetchall()
+            connection.execute('PRAGMA wal_autocheckpoint=0')
+            connection.execute('CREATE TABLE records(id INTEGER PRIMARY KEY, value TEXT)')
+            connection.execute('INSERT INTO records VALUES (1, ?)', ('committed in WAL: ' + name,))
+            connection.commit()
+        names = ['tasks.sqlite', 'toccata.db', 'toccata.statistics-cache.sqlite']
+        for name in names:
+            (self.data / name).chmod(0o600)
+            self.assertGreater((self.data / (name + '-wal')).stat().st_size, 0)
+        backup = self.root / 'backup'
+        manifest = maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
+        stage = maintenance.stage_migration(backup, self.root / 'stage', self.root / 'future-personal-data')
+        maintenance.validate_staged_data(stage, self.root / 'future-personal-data')
+        self.assertFalse((self.root / 'future-personal-data').exists())
+        self.assertEqual(self.details(stage), 'latest committed task')
+        for name in names:
+            for folder in [backup / 'data', stage]:
+                with (folder / name).open('rb') as handle:
+                    self.assertEqual(handle.read(20)[18:20], b'\x01\x01')
+                self.assertEqual((folder / name).stat().st_mode & 0o777, 0o600)
+                self.assertEqual(maintenance.sqlite_inventory(folder / name), manifest['sqlite_inventory'][name])
+                if name != 'tasks.sqlite':
+                    with closing(sqlite3.connect(folder / name)) as connection:
+                        self.assertEqual(connection.execute('SELECT * FROM records').fetchall(),
+                                         [(1, 'committed in WAL: ' + name)])
+                for suffix in ['-wal', '-shm', '-journal']:
+                    self.assertFalse((folder / (name + suffix)).exists(), (folder, name, suffix))
+            self.assertTrue((self.data / (name + '-wal')).exists())
+        maintenance.verify_snapshot(backup)
+
+    def test_legacy_backup_shm_is_removed_only_from_staging_copy(self):
+        self.make_app(self.app); self.make_data(self.data)
+        attachment = self.data / 'daily-notes/tasks.sqlite-shm'
+        for suffix in ['', '-wal', '-shm', '-journal']:
+            (attachment.parent / ('tasks.sqlite' + suffix)).write_bytes(b'research attachment, not a SQLite runtime file')
+        backup = self.root / 'backup'
+        manifest = maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
+        # Older schema-2 snapshots can contain stale SHM despite a DELETE header.
+        (backup / 'data/tasks.sqlite-shm').write_bytes(b'legacy stale shared memory')
+        manifest['files'] = {k: v for k, v in release.tree_hashes(backup).items()
+                             if k not in ['backup.json', 'backup.json.sha256']}
+        manifest['modes'] = {k: v for k, v in release.tree_modes(backup).items()
+                             if k not in ['backup.json', 'backup.json.sha256']}
+        maintenance.write_manifest(backup, manifest)
+        before = release.tree_hashes(backup)
+        stage = maintenance.stage_migration(backup, self.root / 'stage', self.data)
+        maintenance.validate_staged_data(stage, self.data)
+        self.assertFalse((stage / 'tasks.sqlite-shm').exists())
+        for suffix in ['', '-wal', '-shm', '-journal']:
+            self.assertEqual((stage / 'daily-notes' / ('tasks.sqlite' + suffix)).read_bytes(), attachment.read_bytes())
+        self.assertEqual(self.details(stage), 'old')
+        self.assertEqual(release.tree_hashes(backup), before)
+        maintenance.verify_snapshot(backup)
+
+    def test_invalid_staging_is_not_published(self):
+        self.make_app(self.app); self.make_data(self.data)
+        backup = self.root / 'backup'
+        maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
+        with mock.patch.object(maintenance, 'validate_staged_data', side_effect=maintenance.MaintenanceError('not standalone')):
+            with self.assertRaisesRegex(maintenance.MaintenanceError, 'not standalone'):
+                maintenance.stage_migration(backup, self.root / 'stage', self.data)
+        self.assertFalse((self.root / 'stage').exists())
+
+    def test_sqlite_copy_cleanup_never_discards_wal_or_recovery_journals(self):
+        self.make_data(self.data)
+        database = self.data / 'tasks.sqlite'
+        shared_memory = self.data / 'tasks.sqlite-shm'
+        for suffix, contents in [(suffix, contents) for suffix in ['-wal', '-journal']
+                                 for contents in [b'', b'potentially required for recovery']]:
+            with self.subTest(suffix=suffix, contents=contents):
+                journal = self.data / ('tasks.sqlite' + suffix)
+                journal.write_bytes(contents)
+                shared_memory.write_bytes(b'shared memory must stay on failure')
+                with self.assertRaisesRegex(maintenance.MaintenanceError, 'still has a journal'):
+                    maintenance.finalize_sqlite_copy(database)
+                self.assertEqual(journal.read_bytes(), contents)
+                self.assertEqual(shared_memory.read_bytes(), b'shared memory must stay on failure')
+                journal.unlink()
+
+    def test_sqlite_copy_cleanup_rejects_wal_mode_without_deleting_shm(self):
+        self.make_data(self.data, wal=True)
+        shared_memory = self.data / 'tasks.sqlite-shm'
+        before = shared_memory.read_bytes()
+        with self.assertRaisesRegex(maintenance.MaintenanceError, 'not a standalone'):
+            maintenance.finalize_sqlite_copy(self.data / 'tasks.sqlite')
+        self.assertEqual(shared_memory.read_bytes(), before)
+        self.assertTrue((self.data / 'tasks.sqlite-wal').exists())
+
+    def test_cleanup_rejects_malformed_headers_without_removing_shm(self):
+        database = self.root / 'tasks.sqlite'
+        shared = self.root / 'tasks.sqlite-shm'
+        for header in [b'', b'not SQLite' * 2, b'SQLite format 3\x00\x10\x00\x01',
+                       *[b'SQLite format 3\x00\x10\x00' + mode for mode in [b'\x01\x02', b'\x02\x01', b'\x02\x02']]]:
+            with self.subTest(header=header):
+                database.write_bytes(header)
+                shared.write_bytes(b'preserve on failure')
+                with self.assertRaises(maintenance.MaintenanceError):
+                    maintenance.finalize_sqlite_copy(database)
+                self.assertEqual(shared.read_bytes(), b'preserve on failure')
+
+    def test_cleanup_rejects_abnormal_sidecars_without_following_links(self):
+        self.make_data(self.data)
+        database = self.data / 'tasks.sqlite'
+        shared = self.data / 'tasks.sqlite-shm'
+        outside = self.root / 'outside'
+        outside.write_bytes(b'untouched')
+        for suffix in ['-wal', '-journal']:
+            journal = self.data / ('tasks.sqlite' + suffix)
+            journal.symlink_to(self.root / 'missing')
+            shared.write_bytes(b'preserve on failure')
+            with self.assertRaises(maintenance.MaintenanceError):
+                maintenance.finalize_sqlite_copy(database)
+            self.assertTrue(journal.is_symlink())
+            self.assertEqual(shared.read_bytes(), b'preserve on failure')
+            journal.unlink(); shared.unlink()
+        shared.symlink_to(outside)
+        with self.assertRaises(maintenance.MaintenanceError):
+            maintenance.finalize_sqlite_copy(database)
+        self.assertTrue(shared.is_symlink())
+        shared.unlink(); shared.mkdir()
+        with self.assertRaises(maintenance.MaintenanceError):
+            maintenance.finalize_sqlite_copy(database)
+        self.assertTrue(shared.is_dir())
+        self.assertEqual(outside.read_bytes(), b'untouched')
+
+    def test_staged_rollback_journal_is_rejected_before_sqlite_is_opened(self):
+        stage = self.staged()
+        journal = stage / 'tasks.sqlite-journal'
+        journal.write_bytes(b'')
+        with mock.patch.object(maintenance, 'sqlite_inventory') as inventory:
+            with self.assertRaises(maintenance.MaintenanceError):
+                maintenance.validate_staged_data(stage, self.data)
+            inventory.assert_not_called()
+        self.assertEqual(journal.read_bytes(), b'')
+
+    def test_backup_rejects_source_rollback_journal_without_opening_sqlite(self):
+        self.make_app(self.app); self.make_data(self.data)
+        journal = self.data / 'tasks.sqlite-journal'
+        journal.write_bytes(b'recovery needed')
+        before = release.tree_hashes(self.data)
+        with mock.patch.object(maintenance.sqlite3, 'connect') as connect:
+            with self.assertRaisesRegex(maintenance.MaintenanceError, 'Rollback journal'):
+                maintenance.snapshot(self.app, self.data, self.root / 'backup', stopped_check=self.check_stopped)
+            connect.assert_not_called()
+        self.assertFalse((self.root / 'backup').exists())
+        self.assertEqual(release.tree_hashes(self.data), before)
+
+    def test_wal_mode_legacy_backup_is_rejected_without_sqlite_side_effects(self):
+        self.make_app(self.app); self.make_data(self.data)
+        backup = self.root / 'backup'
+        manifest = maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
+        database = backup / 'data/tasks.sqlite'
+        content = bytearray(database.read_bytes()); content[18:20] = b'\x02\x02'
+        database.write_bytes(content)
+        manifest['files']['data/tasks.sqlite'] = release.sha256(database)
+        maintenance.write_manifest(backup, manifest)
+        before = release.tree_hashes(backup)
+        with mock.patch.object(maintenance, 'sqlite_inventory') as inventory:
+            with self.assertRaisesRegex(maintenance.MaintenanceError, 'not a standalone'):
+                maintenance.stage_migration(backup, self.root / 'stage', self.data)
+            inventory.assert_not_called()
+        self.assertFalse((self.root / 'stage').exists())
+        self.assertEqual(release.tree_hashes(backup), before)
+
+    def test_cleanup_failure_preserves_legacy_backup_and_does_not_publish(self):
+        self.make_app(self.app); self.make_data(self.data)
+        backup = self.root / 'backup'
+        manifest = maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
+        (backup / 'data/tasks.sqlite-shm').write_bytes(b'stale shared memory')
+        manifest['files'] = {k: v for k, v in release.tree_hashes(backup).items()
+                             if k not in ['backup.json', 'backup.json.sha256']}
+        manifest['modes'] = {k: v for k, v in release.tree_modes(backup).items()
+                             if k not in ['backup.json', 'backup.json.sha256']}
+        maintenance.write_manifest(backup, manifest)
+        before = release.tree_hashes(backup)
+        real_unlink = Path.unlink
+        def fail_cleanup(path, *args, **kwargs):
+            if path.name == 'tasks.sqlite-shm':
+                raise PermissionError('cleanup denied')
+            return real_unlink(path, *args, **kwargs)
+        with mock.patch.object(Path, 'unlink', fail_cleanup):
+            with self.assertRaisesRegex(PermissionError, 'cleanup denied'):
+                maintenance.stage_migration(backup, self.root / 'stage', self.data)
+        self.assertFalse((self.root / 'stage').exists())
+        self.assertEqual(release.tree_hashes(backup), before)
+
+    def test_wal_snapshot_preserves_committed_values_and_excludes_uncommitted_edits(self):
+        self.make_app(self.app)
+        writer = self.make_data(self.data, 'first value', wal=True)
+        writer.execute('UPDATE tasks SET details=?', ('latest committed value',)); writer.commit()
+        writer.execute('INSERT INTO tasks VALUES (?,?)', ('uncommitted', 'must not appear'))
+        wal = self.data / 'tasks.sqlite-wal'
+        before = wal.read_bytes()
+        backup = self.root / 'backup'
+        maintenance.snapshot(self.app, self.data, backup, stopped_check=self.check_stopped)
+        with closing(sqlite3.connect(backup / 'data/tasks.sqlite')) as connection:
+            self.assertEqual(connection.execute('SELECT * FROM tasks').fetchall(), [('id', 'latest committed value')])
+        self.assertEqual(wal.read_bytes(), before)
 
     def test_backup_is_never_overwritten_and_tampering_is_detected(self):
         self.make_app(self.app); self.make_data(self.data)
@@ -472,7 +679,7 @@ maintenance.install(package, stage, app, data, backup, stopped_check=lambda *_:N
             (stage / 'tasks.sqlite').write_bytes(b'corrupted after the first staging check')
             return result
         with mock.patch.object(maintenance, 'snapshot', side_effect=changed):
-            with self.assertRaises(sqlite3.Error):
+            with self.assertRaisesRegex(maintenance.MaintenanceError, 'not a standalone'):
                 maintenance.install(package, stage, self.app, self.data, self.root / 'backup',
                     stopped_check=self.check_stopped, package_check=self.package_check)
         self.assertEqual(self.details(self.data), 'old')

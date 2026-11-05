@@ -84,7 +84,8 @@ def application_database(relative):
 
 
 def application_journal(relative):
-    return relative.name.endswith(('-wal', '-shm')) and application_database(relative.with_name(relative.name[:-4]))
+    return any(relative.name.endswith(suffix) and application_database(relative.with_name(relative.name[:-len(suffix)]))
+               for suffix in ['-wal', '-shm', '-journal'])
 
 
 def runtime_entry(relative, path):
@@ -115,6 +116,36 @@ def source_state(root, data=False):
     return state
 
 
+def validate_sqlite_copy(path, allow_stale_shm=False):
+    """Inspect without opening SQLite, so validation cannot replay a journal."""
+    path = safe_path(path)
+    if not path.is_file():
+        raise MaintenanceError(f'Not a regular SQLite copy: {path}')
+    with path.open('rb') as handle:
+        header = handle.read(20)
+    if len(header) != 20 or header[:16] != b'SQLite format 3\x00' or header[18:20] != b'\x01\x01':
+        raise MaintenanceError(f'SQLite copy is not a standalone rollback-format database: {path}')
+    # Never discard WAL frames or a recovery journal, even if they look empty.
+    for suffix in ['-wal', '-journal']:
+        if os.path.lexists(path.with_name(path.name + suffix)):
+            raise MaintenanceError(f'SQLite copy still has a journal: {path.name + suffix}')
+    shared_memory = path.with_name(path.name + '-shm')
+    if shared_memory.is_symlink() or (shared_memory.exists() and not shared_memory.is_file()):
+        raise MaintenanceError(f'Unsupported SQLite shared memory entry: {shared_memory}')
+    if shared_memory.exists() and not allow_stale_shm:
+        raise MaintenanceError(f'SQLite copy still has shared memory: {shared_memory}')
+
+
+def finalize_sqlite_copy(path):
+    """Only for private output copies, after all SQLite connections are closed."""
+    validate_sqlite_copy(path, allow_stale_shm=True)
+    shared_memory = path.with_name(path.name + '-shm')
+    # macOS SQLite may leave SHM after WAL -> DELETE even on connection close.
+    # With the DELETE header and no journal, it has no committed data to preserve.
+    if shared_memory.exists():
+        shared_memory.unlink()
+
+
 def copy_data(source, destination):
     """Snapshot SQLite with its committed WAL, copy Markdown/assets without transformation."""
     source, destination = safe_path(source), safe_path(destination)
@@ -124,6 +155,11 @@ def copy_data(source, destination):
         return {}
     if not source.is_dir():
         raise MaintenanceError('Data source must be a directory')
+    # A rollback journal may be needed for recovery. Do not open its main DB
+    # (even read-only) or copy the journal over a newly normalized snapshot.
+    for path in source.iterdir():
+        if path.name.endswith('-journal') and application_journal(Path(path.name)):
+            raise MaintenanceError(f'Rollback journal requires recovery before backup: {path.name}')
     inventories = {}
     config = source / 'config.json'
     if config.exists():
@@ -166,7 +202,9 @@ def copy_data(source, destination):
             with closing(sqlite3.connect(path.as_uri() + '?mode=ro', uri=True, timeout=2)) as original:
                 with closing(sqlite3.connect(output)) as copied:
                     original.backup(copied)
-                    copied.execute('PRAGMA journal_mode=DELETE')
+                    if copied.execute('PRAGMA journal_mode=DELETE').fetchall() != [('delete',)]:
+                        raise MaintenanceError(f'Cannot make a standalone SQLite copy: {relative}')
+            finalize_sqlite_copy(output)
             inventories[relative.as_posix()] = sqlite_inventory(output)
             output.chmod(stat.S_IMODE(path.stat().st_mode))
         else:
@@ -233,6 +271,12 @@ def verify_snapshot(folder):
     modes.pop('backup.json', None); modes.pop('backup.json.sha256', None)
     if modes != manifest.get('modes'):
         raise MaintenanceError('Backup file permissions differ from its manifest')
+    # Older schema-2 backups may have stale SHM, but never require WAL replay.
+    # Preflight all application databases before any SQLite connection is opened.
+    if manifest['data_present']:
+        for path in (folder / 'data').iterdir():
+            if application_database(Path(path.name)):
+                validate_sqlite_copy(path, allow_stale_shm=True)
     for name, inventory in manifest.get('sqlite_inventory', {}).items():
         if Path(name).is_absolute() or '..' in Path(name).parts or 'data/' + name not in actual:
             raise MaintenanceError('Invalid database inventory path')
@@ -279,8 +323,13 @@ def stage_migration(backup, output, target_data, extra_notes=None):
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)
     for name, inventory in manifest.get('sqlite_inventory', {}).items():
+        if application_database(Path(name)):
+            # Support verified older schema-2 backups with a stale root SHM.
+            # Only the new private copy is cleaned; the backup stays untouched.
+            finalize_sqlite_copy(output / name)
         if sqlite_inventory(output / name) != inventory:
             raise MaintenanceError('Migration staging changed database contents')
+    validate_staged_data(output, target_data)
     sync_tree(output)
     release.publish_new(output, final_output)
     sync_directory(final_output.parent)
@@ -520,11 +569,15 @@ def validate_staged_data(staged_data, data):
     if settings.get('db_path') != str(data / 'toccata.db') or settings.get('socket_path') != str(data / 'toccata.sock'):
         raise MaintenanceError('Staged data still points to another data directory')
     release.tree_hashes(staged_data)
-    for path in staged_data.rglob('*'):
+    entries = list(staged_data.rglob('*'))
+    for path in entries:
         relative = path.relative_to(staged_data)
         if application_journal(relative):
-            raise MaintenanceError('Staged data must contain standalone SQLite snapshots, not WAL/SHM files')
+            raise MaintenanceError('Staged data must contain standalone SQLite snapshots, not WAL/SHM/journal files')
         if application_database(relative):
+            validate_sqlite_copy(path)
+    for path in entries:
+        if application_database(path.relative_to(staged_data)):
             sqlite_inventory(path)
 
 
