@@ -39,6 +39,18 @@ worktree 共享 Git 对象和分支信息，不共享未提交文件、忽略配
 
 工作位置和基线仍需在界面中选对；仓库规则不能补救一个已经选错来源的 worktree。未提交的规则变更也不会自动进入从旧个人主线新建的对话。
 
+## 日常开发 CI
+
+独立入口为 [personal-ci.yml](../.github/workflows/personal-ci.yml)。包含该工作流的个人分支提交并推送后，以下 push 会触发检查：`codex/feat/**`、`codex/sync/**`、`codex/personal`。新建功能分支不要求先合入个人主线，也不要求更新版本号、写发布说明或创建标签。`main`、上游分支和标签推送不触发该工作流；删除分支时检查 job 跳过。本地编辑和本地提交不会触发远端运行。
+
+日常 CI 仅在 `EricGao-cn/Toccata` 运行，以推送事件的精确 SHA 检出代码，使用只读 `contents` 权限且不保留 checkout 凭据，不传入 PAT、GitHub secrets 或发布 token。按分支 ref 分组，新 push 会取消同组较早的日常 CI；日常 CI 与发布工作流使用不同的并发组。事件与权限遵循 [GitHub 工作流语法](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)，分组行为见 [并发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。
+
+检查包括推送范围的空白错误、规范资源同步、Python 脚本回归、个人 core 测试、上游完整 Swift 逻辑测试和个人模式专门测试。新分支没有有效的 before SHA，或 rebase 后旧提交不在检出历史中时，空白检查改用当前提交与个人主线的共同祖先。Swift 沿用已验证的双模式：上游模式只跳过交互式 WebKit 测试；个人模式使用 `TOCCATA_PERSONAL` 编译并只运行 `PersonalDistributionTests|PersonalReleaseUpdateTests`，覆盖数据路径保护以及禁止下载、准备和自动安装的策略，避免把两种分发模式的安装预期混在一起。各测试阶段有独立超时，最后检查测试未改变受版本管理的源码或资源。
+
+runner 固定使用 Apple Silicon `macos-26` 和 Xcode 26.2，通过个人 `dev` 入口检查实际 SDK 与固定 Rust 版本，状态与工具链放在 runner 临时目录，构建输出留在忽略的 `.local-dev` 中。不读取本机配置、日用 App 或真实数据，不启动采集服务。回归测试可在临时 fixture 中构造合成归档；工作流不调用候选/正式打包或安装入口，不上传 artifact，不创建标签、Release 草稿或正式发布。既有 `personal-release.yml` 仍只负责固定个人标签的发布流程。
+
+本地检查和隔离试用仍先进行；经授权推送分支后，日常 CI 补充本机缺少完整 Xcode 时无法运行的 XCTest。CI 通过不代表已合并、已发布或已安装，WebKit 交互验收仍需本地桌面。
+
 ## 审查后提交与合并
 
 默认顺序为：实现 → 测试与审查 → 汇报 → 用户授权 → 功能分支本地提交 → 合并个人主线 → 验证结果。

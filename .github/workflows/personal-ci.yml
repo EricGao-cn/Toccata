@@ -1,0 +1,88 @@
+name: Personal development CI
+run-name: Personal CI · ${{ github.ref_name }}
+
+on:
+  push:
+    branches:
+      - 'codex/feat/**'
+      - 'codex/sync/**'
+      - 'codex/personal'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  checks:
+    if: >-
+      github.repository == 'EricGao-cn/Toccata' &&
+      github.event_name == 'push' && github.event.deleted == false &&
+      (github.ref == 'refs/heads/codex/personal' ||
+       startsWith(github.ref, 'refs/heads/codex/feat/') ||
+       startsWith(github.ref, 'refs/heads/codex/sync/'))
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Check pushed changes
+        id: changes
+        env:
+          BEFORE_COMMIT: ${{ github.event.before }}
+        run: |
+          comparison_base="$BEFORE_COMMIT"
+          # New branches have an all-zero before SHA. A rebased branch's old
+          # commit may also be absent from a fresh checkout; compare its current
+          # changes with the accepted personal mainline in those cases.
+          if [[ ! "$comparison_base" =~ ^[0-9a-f]{40}$ || "$comparison_base" == 0000000000000000000000000000000000000000 ]] ||
+             ! git cat-file -e "${comparison_base}^{commit}" 2>/dev/null; then
+            comparison_base="$(git merge-base refs/remotes/origin/codex/personal HEAD)"
+          fi
+          git diff --check "$comparison_base" HEAD
+      - name: Prepare isolated SDK and Rust toolchain
+        timeout-minutes: 12
+        run: |
+          test "$(uname -m)" = arm64
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          ./scripts/personal/dev init --state-root "$RUNNER_TEMP/toccata-ci" --tools-root "$RUNNER_TEMP/toccata-tools"
+          ./scripts/personal/dev setup-rust
+          ./scripts/personal/dev check
+          ./scripts/personal/dev fetch
+      - name: Check canonical resources
+        run: |
+          ./scripts/sync-assets.sh
+          git diff --exit-code
+      - name: Test scripts
+        timeout-minutes: 10
+        run: ./scripts/personal/dev test-scripts
+      - name: Test personal core
+        timeout-minutes: 10
+        run: ./scripts/personal/dev test-core --features personal-distribution
+      - name: Test upstream Studio logic
+        timeout-minutes: 15
+        run: |
+          # Interactive WebKit tests need a local desktop.
+          ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests
+      - name: Test personal distribution and manual-update guards
+        timeout-minutes: 15
+        run: |
+          # Do not run upstream automatic-installation tests with personal guards enabled.
+          ./scripts/personal/dev test-swift --filter 'PersonalDistributionTests|PersonalReleaseUpdateTests' -Xswiftc -DTOCCATA_PERSONAL
+      - name: Confirm checks left tracked source unchanged
+        run: |
+          git diff --check
+          git diff --exit-code
+          test -z "$(git ls-files --others --exclude-standard)"

@@ -49,6 +49,8 @@ See the [personal distribution guide](docs/personal-release.md) for installation
 
 Update mirror `main` as upstream advances. Integrate upstream into the personal mainline by release or reviewed batch, rather than automatically merging every commit. Start personal development from `codex/personal`. See the [development/worktree guide](docs/personal-development.md) and [Agent rules](AGENTS.md).
 
+[Daily development CI](.github/workflows/personal-ci.yml) checks and tests pushes to personal feature, sync and mainline branches. It needs no release tag and does not package installers or create Release drafts. It takes effect once a branch containing the workflow is committed and pushed. See the [development CI procedure](docs/personal-development.md#日常开发-ci) for scope and test policies.
+
 ## Build and release
 
 Personal packages are built and verified with `scripts/personal/release.py`, then prepared as DMG (with ZIP compatibility) using `scripts/personal/publish.py`. The active [personal Actions workflow](.github/workflows/personal-release.yml) builds the DMG and SHA-256 and creates a Release draft when a new personal tag is pushed. It also supports manual runs from the personal mainline; final publication remains a maintainer decision. Version 1.1.1 completed this cloud build and draft upload flow; existing 1.1.0 packages were built locally. The inherited upstream workflow targets the upstream distribution and is not the personal publishing entry point.
