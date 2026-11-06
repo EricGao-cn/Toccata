@@ -1,3 +1,67 @@
+<p align="center"><img src="shared/branding/toccata-app-icon.png" alt="Toccata Personal" width="96"></p>
+
+# Toccata Personal
+
+[简体中文](README.md) · **English**
+
+This is the personal fork maintained at [EricGao-cn/Toccata](https://github.com/EricGao-cn/Toccata), based on [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata). It retains upstream tasks and local keyboard activity, adding independent daily Markdown notes and research progress reviews.
+
+[Download personal DMG](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg) · [SHA-256](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg.sha256) · [All personal releases](https://github.com/EricGao-cn/Toccata/releases) · [Apache-2.0](LICENSE)
+
+## Download and use
+
+The published personal release is **personal-v1.1.0 / build 2**, based on upstream **v0.1.4**. Its current package targets Apple Silicon Macs running macOS 13 or later. Check the personal releases page for later versions.
+
+1. Download the personal DMG and verify it against its SHA-256 file. Historical installation ZIPs remain available; GitHub Source code archives contain source only.
+2. Open the image, then use Finder → Go → Go to Folder and enter `~/Applications`. Quit an existing personal instance before dragging `Toccata Personal.app` there. Create the folder first if necessary.
+3. Eject the image and launch `~/Applications/Toccata Personal.app`, rather than running from the DMG or a development worktree.
+4. Tasks and daily notes work independently. To enable keyboard statistics, confirm Input Monitoring in System Settings → Privacy & Security. Do not run the upstream and personal collectors simultaneously.
+
+The App currently uses an **ad-hoc signature and has not been Developer ID notarized**. Users confirm system permissions and security prompts themselves. Update checks offer personal stable versions and their download pages; they never download or install updates automatically. Existing 1.1.0 installations need no reinstall merely because a DMG was added.
+
+## Personal workflow
+
+- **Daily notes:** one Markdown file per day, whole-page editing, autosave and date-based browsing. Menu bar and workbench share drafts. No required templates or automatic TODO creation.
+- **Review:** switch between notes and tasks for a selected date range, copy the current content, or explicitly copy everything for a weekly report.
+- **Tasks:** retain upstream tasks, subtasks, pinning, drag ordering and calendar views.
+
+## Separate data from upstream
+
+| Distribution | Default data location |
+| --- | --- |
+| Personal stable App | `~/Library/Application Support/Toccata-Personal/` |
+| Upstream App | `~/Library/Application Support/Toccata/` |
+| Isolated development and candidate Apps | Per-worktree test directories, usually under `~/Library/Application Support/Toccata-Dev/` |
+
+Daily notes live at `daily-notes/YYYY-MM-DD.md` inside the personal data directory. First use may start with empty personal data, retaining the upstream App and data without migration. Back up before updating an existing personal installation: downgrading the App does not roll back its database. Databases, notes, backups, machine configuration and toolchains stay out of Git.
+
+See the [personal distribution guide](docs/personal-release.md) for installation, backup, optional migration and rollback.
+
+## Branches and maintenance
+
+| Branch or tag | Role |
+| --- | --- |
+| `main` | Pure upstream mirror; follows `upstream/main` without personal modifications |
+| `codex/personal` | GitHub default branch and long-lived personal mainline for accepted features and upstream integrations |
+| `codex/feat/*` | Feature development from the personal mainline; integrate after testing, review and authorization |
+| `codex/sync/*` | Integrate a selected upstream tag or commit from the personal mainline; verify before merging back |
+| `personal-vX.Y.Z` | Fixed personal release tags; never moved or reused after release |
+
+Update mirror `main` as upstream advances. Integrate upstream into the personal mainline by release or reviewed batch, rather than automatically merging every commit. Start personal development from `codex/personal`. See the [development/worktree guide](docs/personal-development.md) and [Agent rules](AGENTS.md).
+
+## Build and release
+
+Personal packages are currently built and verified locally with `scripts/personal/release.py`, then prepared as DMG (with ZIP compatibility) using `scripts/personal/publish.py` and uploaded to GitHub Releases. **Personal cloud builds through Actions are not configured yet.** The inherited upstream release workflow targets the upstream distribution and is not the personal publishing entry point.
+
+Personal builds use SDK 26.2; upstream entry points retain their SDK 26.5 requirement. After acceptance and integration, authorize a new fixed tag, stable build, draft upload and final publication. Building, pushing, publishing and installing remain separate authorized steps; none implicitly replaces the daily-use App.
+
+## Upstream and license
+
+The original project is maintained by [KMnO4-zx](https://github.com/KMnO4-zx). This fork retains upstream attribution, licensing and acknowledgments. First-person statements in the upstream introduction below belong to its author.
+
+<details>
+<summary>Upstream introduction and general documentation (original text retained)</summary>
+
 <p align="center">
   <img src="shared/branding/toccata-app-icon.png" alt="Toccata" width="96">
 </p>
@@ -88,3 +152,5 @@ Contributions to code, documentation, translations, and testing are welcome. See
 - <img src="images/logos/openai-rounded.svg" width="20" height="20" alt="OpenAI Logo"> &nbsp; Thanks to the **[OpenAI Codex for Open Source program](https://developers.openai.com/community/codex-for-oss)** for giving me 12 months of ChatGPT Pro. GPT 6 Astra is a great coding model!
 - <img src="images/logos/volcengine.png" width="20" height="20" alt="Volcengine Logo"> &nbsp; Thanks to the **[Volcengine Hero Program](https://developer.volcengine.com/)**. Doubao's multimodal capabilities are excellent!
 - <img src="images/logos/datawhale.png" width="20" height="20" alt="Datawhale Logo"> &nbsp; Thanks to **[Datawhale](https://datawhale.cn/)**. A place to meet wonderful people on the same journey.
+
+</details>

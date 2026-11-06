@@ -1,3 +1,67 @@
+<p align="center"><img src="shared/branding/toccata-app-icon.png" alt="Toccata Personal" width="96"></p>
+
+# Toccata Personal
+
+**简体中文** · [English](README_EN.md)
+
+这是 [EricGao-cn/Toccata](https://github.com/EricGao-cn/Toccata) 维护的个人 Fork，基于 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata)。保留上游任务与本地键盘活动功能，加入独立的每日 Markdown 记录和科研过程回顾。
+
+[下载个人版 DMG](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg) · [SHA-256](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg.sha256) · [全部个人发布](https://github.com/EricGao-cn/Toccata/releases) · [Apache-2.0](LICENSE)
+
+## 下载与使用
+
+已发布个人版 **personal-v1.1.0 / build 2**，基于上游 **v0.1.4**，当前安装包适用于 Apple Silicon Mac、macOS 13 及以上。后续版本请查看个人发布页。
+
+1. 下载个人版 DMG，按随附 SHA-256 文件核对下载。历史 ZIP 安装包继续保留；GitHub 的 Source code 压缩包只含源码。
+2. 打开镜像，在 Finder 的“前往 → 前往文件夹”输入 `~/Applications`。退出已有个人版后，将 `Toccata Personal.app` 拖入；如无该文件夹，先新建。
+3. 推出镜像，从 `~/Applications/Toccata Personal.app` 启动，不直接从 DMG 或开发工作树运行。
+4. 任务与每日记录可独立使用。需要键盘统计时，由用户在“系统设置 → 隐私与安全性 → 输入监控”确认权限；不要同时运行原版和个人版的采集服务。
+
+当前 App 是 **ad-hoc 签名，未做 Developer ID 公证**；系统权限和放行由用户确认。更新检查只提供个人正式版本与下载页，不自动下载安装。现有 1.1.0 用户不需要因为增加 DMG 封装而重装。
+
+## 个人工作流
+
+- **每日记录**：每天一个 Markdown 文件，整页续写、自动保存、按日期回看；菜单栏和工作台共享编辑草稿，不强制模板，也不自动生成 TODO。
+- **回顾**：按日期范围切换每日记录和任务，分别复制当前内容，或显式复制全部，作为周报素材。
+- **任务管理**：保留上游的任务、子任务、置顶、拖拽排序及日历功能。
+
+## 数据与原版隔离
+
+| 类型 | 默认数据位置 |
+| --- | --- |
+| 个人正式版 | `~/Library/Application Support/Toccata-Personal/` |
+| 上游原版 | `~/Library/Application Support/Toccata/` |
+| 隔离开发与候选版 | 独立工作树配置的测试目录，通常位于 `~/Library/Application Support/Toccata-Dev/` |
+
+每日记录存放在个人数据目录的 `daily-notes/YYYY-MM-DD.md`。首次使用可以从空个人数据开始，保留原版 App 和数据，不要求迁移。更新已有个人版前先备份；降级 App 不会自动回滚数据库。数据库、日记、备份、本机配置和工具链不提交到 Git。
+
+具体安装、备份、可选迁移及回滚流程见 [个人稳定版说明](docs/personal-release.md)。
+
+## 分支与维护
+
+| 分支或标签 | 职责 |
+| --- | --- |
+| `main` | 纯上游镜像，只跟随 `upstream/main`，不加入个人修改 |
+| `codex/personal` | GitHub 默认分支和个人长期主线，接收验收过的功能及上游同步 |
+| `codex/feat/*` | 从个人主线开始开发，测试、审查后按授权合回个人主线 |
+| `codex/sync/*` | 从个人主线选择上游标签或明确提交做同步，验证后再合回 |
+| `personal-vX.Y.Z` | 固定个人发布标签，发布后不移动或复用 |
+
+上游的新提交先更新镜像 `main`，个人主线按版本或批次吸收，不逐个提交自动合并。功能开发从 `codex/personal` 出发，避免在镜像分支上做个人定制。详见 [开发与工作树流程](docs/personal-development.md) 和 [Agent 规则](AGENTS.md)。
+
+## 构建与发布
+
+当前个人包在本机通过 `scripts/personal/release.py` 构建、校验，再由 `scripts/personal/publish.py` 整理 DMG（兼容 ZIP）及发布素材，上传 GitHub Release。**个人版云端 Actions 构建尚未接入。** 仓库继承的上游发布工作流面向原版，不用来发布个人包。
+
+个人构建使用 SDK 26.2；上游入口仍保留自己的 SDK 26.5 要求。已验收提交合入个人主线后，按授权创建新标签、构建正式包、上传草稿并确认发布。构建、推送、发布和安装分别授权，任何一步都不隐式替换日用 App。
+
+## 上游与许可证
+
+上游项目由 [KMnO4-zx](https://github.com/KMnO4-zx) 维护，本仓库保留其来源、许可证和致谢。上游介绍中的第一人称叙述属于原作者。
+
+<details>
+<summary>上游项目介绍与通用说明（保留原文）</summary>
+
 <p align="center">
   <img src="shared/branding/toccata-app-icon.png" alt="Toccata" width="96">
 </p>
@@ -89,3 +153,5 @@ Toccata 常驻菜单栏，默认显示 Dock 图标，可在“设置 → 通用�
 - <img src="images/logos/openai-rounded.svg" width="20" height="20" alt="OpenAI Logo"> &nbsp; 感谢 **[OpenAI Codex For Open Source 计划](https://developers.openai.com/community/codex-for-oss)**，赠予我 12 个月的 ChatGPT Pro 订阅。GPT 6 Astra 是一个很棒的 Coding 模型！
 - <img src="images/logos/volcengine.png" width="20" height="20" alt="火山引擎 Logo"> &nbsp; 感谢 **[火山 Hero 计划](https://developer.volcengine.com/)**。 豆包的多模态能力确实非常棒！
 - <img src="images/logos/datawhale.png" width="20" height="20" alt="Datawhale Logo"> &nbsp; 感谢 **[Datawhale](https://datawhale.cn/)**。 在 Datawhale 可以遇到优秀的同行人。
+
+</details>
