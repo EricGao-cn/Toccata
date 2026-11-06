@@ -6,18 +6,18 @@
 
 这是 [EricGao-cn/Toccata](https://github.com/EricGao-cn/Toccata) 维护的个人 Fork，基于 [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata)。保留上游任务与本地键盘活动功能，加入独立的每日 Markdown 记录和科研过程回顾。
 
-[下载个人版 DMG](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg) · [SHA-256](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg.sha256) · [全部个人发布](https://github.com/EricGao-cn/Toccata/releases) · [Apache-2.0](LICENSE)
+[下载个人版 DMG](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.1/Toccata-Personal-1.1.1-arm64.dmg) · [SHA-256](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.1/Toccata-Personal-1.1.1-arm64.dmg.sha256) · [全部个人发布](https://github.com/EricGao-cn/Toccata/releases) · [Apache-2.0](LICENSE)
 
 ## 下载与使用
 
-已发布个人版 **personal-v1.1.0 / build 2**，基于上游 **v0.1.4**，当前安装包适用于 Apple Silicon Mac、macOS 13 及以上。后续版本请查看个人发布页。
+已发布个人版 **personal-v1.1.1 / build 3**，基于上游 **v0.1.4**，由 GitHub Actions 构建。当前安装包适用于 Apple Silicon Mac、macOS 13 及以上。后续版本请查看个人发布页。
 
 1. 下载个人版 DMG，按随附 SHA-256 文件核对下载。历史 ZIP 安装包继续保留；GitHub 的 Source code 压缩包只含源码。
 2. 打开镜像，在 Finder 的“前往 → 前往文件夹”输入 `~/Applications`。退出已有个人版后，将 `Toccata Personal.app` 拖入；如无该文件夹，先新建。
 3. 推出镜像，从 `~/Applications/Toccata Personal.app` 启动，不直接从 DMG 或开发工作树运行。
 4. 任务与每日记录可独立使用。需要键盘统计时，由用户在“系统设置 → 隐私与安全性 → 输入监控”确认权限；不要同时运行原版和个人版的采集服务。
 
-当前 App 是 **ad-hoc 签名，未做 Developer ID 公证**；系统权限和放行由用户确认。更新检查只提供个人正式版本与下载页，不自动下载安装。现有 1.1.0 用户不需要因为增加 DMG 封装而重装。
+当前 App 是 **ad-hoc 签名，未做 Developer ID 公证**；系统权限和放行由用户确认。更新检查只提供个人正式版本与下载页，不自动下载安装。现有 1.1.0 可继续使用；1.1.1 主要更新构建与发布流程，是否安装由用户决定。
 
 ## 个人工作流
 
@@ -51,7 +51,7 @@
 
 ## 构建与发布
 
-个人包通过 `scripts/personal/release.py` 构建、校验，再由 `scripts/personal/publish.py` 整理 DMG（兼容 ZIP）及发布素材。独立的 [个人 Actions 工作流](.github/workflows/personal-release.yml) 在推送新个人标签后自动构建 DMG、SHA-256 并创建 Release 草稿，也支持从个人主线手动运行；正式发布仍由维护者核对后确认。入口需先合入并推送后生效，既有 1.1.0 安装包仍来自此前本机构建。仓库继承的上游发布工作流面向原版，不用来发布个人包。
+个人包通过 `scripts/personal/release.py` 构建、校验，再由 `scripts/personal/publish.py` 整理 DMG（兼容 ZIP）及发布素材。已启用的 [个人 Actions 工作流](.github/workflows/personal-release.yml) 在推送新个人标签后自动构建 DMG、SHA-256 并创建 Release 草稿，也支持从个人主线手动运行；正式发布仍由维护者核对后确认。1.1.1 已通过该流程完成云端构建与草稿上传；既有 1.1.0 安装包来自此前本机构建。仓库继承的上游发布工作流面向原版，不用来发布个人包。
 
 个人构建使用 SDK 26.2；上游入口仍保留自己的 SDK 26.5 要求。已验收提交合入个人主线后，按授权创建并推送新标签，触发构建和草稿上传；也可继续本机手动打包。工作流不覆盖同名发布或草稿，不移动标签。正式发布和安装分别确认，任何一步都不隐式替换日用 App。详见 [个人 Actions 流程](docs/personal-release.md#个人-github-actions构建-dmg-并停在草稿)。
 

@@ -6,18 +6,18 @@
 
 This is the personal fork maintained at [EricGao-cn/Toccata](https://github.com/EricGao-cn/Toccata), based on [KMnO4-zx/Toccata](https://github.com/KMnO4-zx/Toccata). It retains upstream tasks and local keyboard activity, adding independent daily Markdown notes and research progress reviews.
 
-[Download personal DMG](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg) · [SHA-256](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.0/Toccata-Personal-1.1.0-arm64.dmg.sha256) · [All personal releases](https://github.com/EricGao-cn/Toccata/releases) · [Apache-2.0](LICENSE)
+[Download personal DMG](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.1/Toccata-Personal-1.1.1-arm64.dmg) · [SHA-256](https://github.com/EricGao-cn/Toccata/releases/download/personal-v1.1.1/Toccata-Personal-1.1.1-arm64.dmg.sha256) · [All personal releases](https://github.com/EricGao-cn/Toccata/releases) · [Apache-2.0](LICENSE)
 
 ## Download and use
 
-The published personal release is **personal-v1.1.0 / build 2**, based on upstream **v0.1.4**. Its current package targets Apple Silicon Macs running macOS 13 or later. Check the personal releases page for later versions.
+The published personal release is **personal-v1.1.1 / build 3**, based on upstream **v0.1.4** and built by GitHub Actions. Its current package targets Apple Silicon Macs running macOS 13 or later. Check the personal releases page for later versions.
 
 1. Download the personal DMG and verify it against its SHA-256 file. Historical installation ZIPs remain available; GitHub Source code archives contain source only.
 2. Open the image, then use Finder → Go → Go to Folder and enter `~/Applications`. Quit an existing personal instance before dragging `Toccata Personal.app` there. Create the folder first if necessary.
 3. Eject the image and launch `~/Applications/Toccata Personal.app`, rather than running from the DMG or a development worktree.
 4. Tasks and daily notes work independently. To enable keyboard statistics, confirm Input Monitoring in System Settings → Privacy & Security. Do not run the upstream and personal collectors simultaneously.
 
-The App currently uses an **ad-hoc signature and has not been Developer ID notarized**. Users confirm system permissions and security prompts themselves. Update checks offer personal stable versions and their download pages; they never download or install updates automatically. Existing 1.1.0 installations need no reinstall merely because a DMG was added.
+The App currently uses an **ad-hoc signature and has not been Developer ID notarized**. Users confirm system permissions and security prompts themselves. Update checks offer personal stable versions and their download pages; they never download or install updates automatically. Existing 1.1.0 installations can remain in use. Version 1.1.1 mainly changes building and publishing; users choose whether to install it.
 
 ## Personal workflow
 
@@ -51,7 +51,7 @@ Update mirror `main` as upstream advances. Integrate upstream into the personal 
 
 ## Build and release
 
-Personal packages are built and verified with `scripts/personal/release.py`, then prepared as DMG (with ZIP compatibility) using `scripts/personal/publish.py`. A separate [personal Actions workflow](.github/workflows/personal-release.yml) builds the DMG and SHA-256 and creates a Release draft when a new personal tag is pushed. It also supports manual runs from the personal mainline; final publication remains a maintainer decision. This entry point takes effect after integration and push. Existing 1.1.0 packages were built locally. The inherited upstream workflow targets the upstream distribution and is not the personal publishing entry point.
+Personal packages are built and verified with `scripts/personal/release.py`, then prepared as DMG (with ZIP compatibility) using `scripts/personal/publish.py`. The active [personal Actions workflow](.github/workflows/personal-release.yml) builds the DMG and SHA-256 and creates a Release draft when a new personal tag is pushed. It also supports manual runs from the personal mainline; final publication remains a maintainer decision. Version 1.1.1 completed this cloud build and draft upload flow; existing 1.1.0 packages were built locally. The inherited upstream workflow targets the upstream distribution and is not the personal publishing entry point.
 
 Personal builds use SDK 26.2; upstream entry points retain their SDK 26.5 requirement. After acceptance and integration, authorize creation and push of a new fixed tag, which triggers building and draft upload; local manual packaging remains available. The workflow never overwrites an existing Release or draft or moves a tag. Final publication and installation require separate confirmation; none implicitly replaces the daily-use App. See the [personal Actions procedure](docs/personal-release.md#个人-github-actions构建-dmg-并停在草稿).
 

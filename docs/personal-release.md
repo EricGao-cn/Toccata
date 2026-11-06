@@ -2,7 +2,7 @@
 
 ## 当前阶段和身份
 
-个人版本基于上游 `v0.1.4`，通过个人 GitHub Release 分发，本机手动安装。既有个人标签和安装包不移动、不覆盖；当前准备版本为 `1.1.1 / build 3`，发布说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。须验收并获得相应授权后才能提交、打新标签、推送和发布。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
+个人版本基于上游 `v0.1.4`，通过个人 GitHub Release 分发，本机手动安装。既有个人标签和安装包不移动、不覆盖；当前个人稳定版为 `1.1.1 / build 3`，已通过 Actions 构建并核验后正式发布，说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。后续版本须验收并获得相应授权后才能提交、打新标签、推送和发布。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
 
 | 类型 | Bundle ID | 数据目录 | 采集与更新 |
 | --- | --- | --- | --- |
