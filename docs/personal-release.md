@@ -111,7 +111,7 @@ python3 -B scripts/personal/publish.py create-draft \
 
 两个 job 的职责与权限：
 
-1. **build（contents: read）**：先检出已接受的 `codex/personal`，用其中的校验脚本解析 annotated 标签并确认提交属于个人主线，之后才检出解析所得的精确 SHA；不先运行待校验标签里的脚本。再次核对标签对象未变、版本、上游基线、非空更新说明与远端同名发布，再初始化隔离环境，运行脚本回归测试、个人 core 测试和带个人编译标记的 Swift 测试。只读 token 的草稿可见性有限，最终防重检查仍在持写权限的 draft job 中执行。WebKit 交互测试仍跳过。构建完整 ad-hoc 签名 App，生成并只读挂载校验 DMG；将 DMG、两个清单及校验文件、更新说明、发布素材元数据作为 Actions artifact 保留 14 天。另将提交、标签对象和 DMG SHA-256 作为独立 job 输出。
+1. **build（contents: read）**：先检出已接受的 `codex/personal`，用其中的校验脚本解析 annotated 标签并确认提交属于个人主线，之后才检出解析所得的精确 SHA；不先运行待校验标签里的脚本。再次核对标签对象未变、版本、上游基线、非空更新说明与远端同名发布，再初始化隔离环境，分别运行脚本回归、个人 core、上游完整 Swift 逻辑测试及个人模式专门测试。上游模式仅跳过交互式 `MarkdownWebEditorTests`；个人模式单独运行 `PersonalDistributionTests|PersonalReleaseUpdateTests`，其中包含禁止下载、准备和安装的保护验证。上游自动安装的正向测试只在上游模式运行，避免在个人版明确拒绝回调后无限等待。各测试阶段有独立超时和日志步骤。只读 token 的草稿可见性有限，最终防重检查仍在持写权限的 draft job 中执行。构建完整 ad-hoc 签名 App，生成并只读挂载校验 DMG；将 DMG、两个清单及校验文件、更新说明、发布素材元数据作为 Actions artifact 保留 14 天。另将提交、标签对象和 DMG SHA-256 作为独立 job 输出。
 2. **draft（contents: write、actions: read）**：从精确构建提交检出代码，按 build 输出的固定 artifact ID，显式通过当前仓库和当前 workflow run 的 REST 接口下载素材。`actions: read` 只用于读取 artifact；ID 缺失或非法时失败，不退回下载全部 artifact。只重跑失败的草稿 job 时仍使用原成功 build 的 ID，不按新 attempt 猜测名称。再次核对固定标签、主线、App 签名、DMG 内容、清单、架构与独立 job 输出的 SHA-256，并将 artifact 更新说明与标签中的已提交原文比对。创建私有上传快照后，仅执行 `gh release create --draft --verify-tag`。上传后用认证的分页 Release 列表定位唯一草稿，再按数字 Release ID 回读状态、版本、说明和全部四个附件的 SHA-256，并再次检查远端标签对象和提交未变，通过后输出草稿链接；不使用仅针对已发布版本的按标签查询接口。`GH_TOKEN` 只传给校验/上传脚本；官方 checkout/download action 使用各自 job 的 token，checkout 不保留认证信息。不使用长期 PAT，不执行 push、移动标签、删除或覆盖资产。
 
 上传前校验失败不会创建草稿；上传中断或上传后回读失败可能留下需要检查的草稿，错误会提示先查看发布页，工作流不会自动重试、删除或覆盖它。同标签并发最多执行一个运行，不取消正在构建/上传的运行；GitHub 可能用较新的等待运行替换旧的等待运行。后来的运行若发现已有草稿/发布就失败并保留现场。先核对 Actions 日志、artifact 和 GitHub 草稿，再决定后续操作；不要自动清除失败草稿或重用已发布标签。
@@ -119,6 +119,8 @@ python3 -B scripts/personal/publish.py create-draft \
 正式发布始终在 GitHub 草稿核对后由维护者点击 **Publish release**，工作流没有 publish 模式。草稿不会被 App 的更新检查识别；发布也不会安装到本机。当前仍为 ad-hoc 签名、未公证，Actions 不会自动改变签名方式；本地手动打包和 ZIP 兼容入口继续可用。
 
 工具链参考：[macOS runner 镜像](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md)、[GitHub 事件](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)、[工作流权限](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)。首次远端运行前应确认仓库 Actions 已启用且策略允许固定 SHA 的官方 actions；之后另行授权推送和执行，不为本地验证修改仓库设置。
+
+首次运行还须确认 Fork 包含配置中的固定上游标签；`main` 已包含上游提交不代表同名标签也已同步。若缺失，只能在核对本地与上游标签对象完全一致后单独同步，不覆盖既有标签。仅修正 Actions 编排时，可从个人主线手动运行修正后的工作流并指定原有固定个人标签；App 仍构建该标签的原提交，工作流提交与 App 源码提交分别记录，不移动标签。
 
 ## 当前首次使用方案：全新个人数据，不迁移
 

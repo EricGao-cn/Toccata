@@ -66,6 +66,18 @@ class PersonalWorkflowTests(unittest.TestCase):
         self.assertLess(checkout, checked)
         self.assertIn('--tag-object "$TAG_OBJECT"', steps[checked]['run'])
 
+    def test_upstream_installer_tests_and_personal_guards_use_separate_compilations(self):
+        swift = [step for step in self.build['steps'] if 'dev test-swift' in step.get('run', '')]
+        self.assertEqual(len(swift), 2)
+        upstream = next(step for step in swift if '-DTOCCATA_PERSONAL' not in step['run'])
+        personal = next(step for step in swift if '-DTOCCATA_PERSONAL' in step['run'])
+        self.assertIn('--skip MarkdownWebEditorTests', upstream['run'])
+        self.assertNotIn('--filter', upstream['run'])
+        self.assertIn("--filter 'PersonalDistributionTests|PersonalReleaseUpdateTests'", personal['run'])
+        for step in swift:
+            self.assertGreater(step['timeout-minutes'], 0)
+            self.assertLessEqual(step['timeout-minutes'], 15)
+
     def test_failed_job_reruns_keep_original_artifact_id_and_workflow_run(self):
         download = next(step['with'] for step in self.draft['steps']
                         if step.get('uses', '').startswith('actions/download-artifact@'))

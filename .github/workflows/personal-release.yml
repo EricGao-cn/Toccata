@@ -74,12 +74,23 @@ jobs:
           ./scripts/personal/dev setup-rust
           ./scripts/personal/dev check
           ./scripts/personal/dev fetch
-      - name: Test scripts, personal core and Studio logic
+      - name: Test release scripts
+        timeout-minutes: 10
+        run: ./scripts/personal/dev test-scripts
+      - name: Test personal core
+        timeout-minutes: 10
+        run: ./scripts/personal/dev test-core --features personal-distribution
+      - name: Test upstream Studio logic
+        timeout-minutes: 15
         run: |
-          ./scripts/personal/dev test-scripts
-          ./scripts/personal/dev test-core --features personal-distribution
           # WebKit integration tests require an interactive desktop.
-          ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests -Xswiftc -DTOCCATA_PERSONAL
+          ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests
+      - name: Test personal distribution and manual-update guards
+        timeout-minutes: 15
+        run: |
+          # Upstream automatic-installation tests intentionally require a different policy.
+          # PersonalReleaseUpdateTests also proves download/preparation/installation stay blocked.
+          ./scripts/personal/dev test-swift --filter 'PersonalDistributionTests|PersonalReleaseUpdateTests' -Xswiftc -DTOCCATA_PERSONAL
           git diff --exit-code
       - name: Build signed personal package and verified DMG
         run: |
