@@ -1,8 +1,8 @@
 # Toccata 个人开发说明
 
-个人 Fork 采用功能 worktree、个人主线和固定版本安装包的流程。定制代码允许公开，第一阶段手动更新个人稳定版，不默认向上游提 Issue 或 PR。
+个人 Fork 采用功能 worktree、个人主线、日常开发 CI 和固定标签发布的流程。定制代码允许公开，个人 App 通过 GitHub Release 分发并手动更新，不默认向上游提 Issue 或 PR。
 
-本文描述当前能用的开发入口，以及尚待实现的个人稳定分发约定。初始化、构建和测试均不意味着授权提交、推送、发布、安装或迁移日用数据。
+本文是当前开发操作手册，发布与日用更新见 [个人稳定版流程](personal-release.md)，早期准备阶段和验收结果见 [历史记录](personal-history.md)。初始化、构建和测试均不意味着授权提交、推送、发布、安装或迁移日用数据。
 
 `AGENTS.md` 是 Agent 默认读取的执行规则，保持简短，集中说明必须遵守的工作方式和边界。本文主要是供维护者阅读的操作手册，解释步骤、原因和例外，Agent 处理相关任务时也要参考。两者保持一致；新功能对话只需说明功能目标和验收标准，不必重复整段固定开场。
 
@@ -14,7 +14,7 @@
 | `codex/personal` | 个人主线，接收验收过的功能和上游升级 |
 | `codex/feat/<name>` | 单个功能；较大改动使用独立 worktree |
 | `codex/sync/<upstream-tag>` | 从个人主线出发，单独验证上游合并 |
-| `personal-vX.Y.Z` | 后续个人稳定版本的固定 Tag；不能移动或复用 |
+| `personal-vX.Y.Z` | 个人正式发布的固定 Tag；不能移动或复用 |
 
 GitHub 默认分支使用 `codex/personal`，让仓库首页和新克隆以个人版本为主；`main` 继续作为上游镜像，这两个职责独立。更新镜像不意味着立即更新个人主线：优先选择上游正式标签或一批明确提交，在 `codex/sync/*` 中审查、验证后整合。
 
@@ -92,7 +92,7 @@ Codex 托管 worktree 可能随对话归档而被清理。归档快照不是 Git
 
 配置绑定工作目录的物理路径，复制或移动后不能直接复用。需要迁移目录时，应先单独核对配置和数据中的绝对路径；不会自动搬迁或删除原外置数据，不通过修改身份绕过隔离检查。
 
-**当前主目录兼容旧环境**：首次初始化会保留现有 `.local-dev/data/`、`cn.ericgao.toccata.dev` 身份及 `.local-dev/cargo`、`rustup`，不移动数据库，不改写已有数据配置。因此这里的 `.local-dev` 不只是缓存，不能整体删除。删除其他 worktree 之前也要先确认需要保留的文件和外置数据。
+**旧开发环境的兼容行为仍生效**：初始化会保留现有 `.local-dev/data/`、`cn.ericgao.toccata.dev` 身份及 `.local-dev/cargo`、`rustup`，不移动数据库，不改写已有数据配置。因此这里的 `.local-dev` 不只是缓存，不能整体删除。删除其他 worktree 之前也要先确认需要保留的文件和外置数据。
 
 ## 从新目录重建开发环境
 
@@ -127,10 +127,10 @@ Codex 托管 worktree 可能随对话归档而被清理。归档快照不是 Git
 | --- | --- |
 | 上游正式版 | 原 `com.toccata.studio`、原数据目录；个人脚本不安装或替换它 |
 | 开发版 | `cn.ericgao.toccata.dev.<worktree-id>`，独立偏好和测试数据；旧主目录保留历史身份 |
-| 个人候选包 | 开发身份加 `.candidate`，测试目录下的 `personal-candidate/`；关闭采集与在线更新 |
+| 个人候选包 | 开发身份加 `.candidate`，测试目录下的 `personal-candidate/`；关闭采集与在线安装，可手动检查个人发布 |
 | 个人稳定版 | `cn.ericgao.toccata.personal` 和独立的 `Toccata-Personal` 数据目录；构建、发布和安装各需单独授权 |
 
-构建脚本只生成本地、ad-hoc 签名的任务管理 App，不内嵌采集服务。生成的启动器会固定测试数据路径；不要绕过启动器直接运行包内的 `ToccataDevBinary`。日常使用 `dev run`，它会核对已构建 App 的身份、SDK 和数据路径是否仍匹配配置。
+`dev build` 只生成本地、ad-hoc 签名的任务管理 App，不内嵌采集服务。生成的启动器会固定测试数据路径；不要绕过启动器直接运行包内的 `ToccataDevBinary`。日常使用 `dev run`，它会核对已构建 App 的身份、SDK 和数据路径是否仍匹配配置。包含完整 helper 的候选/正式包由独立的 `release.py` 构建，不与此入口混用。
 
 脚本拒绝官方/个人稳定数据目录及其父子路径、错误的数据库/socket 重定向和符号链接运行文件。现有数据配置有问题时会报错，不会静默修复或覆盖。配置和打包机制不等于数据库同步，开发库不能作为稳定版升级时的数据来源。
 
@@ -142,30 +142,26 @@ Codex 托管 worktree 可能随对话归档而被清理。归档快照不是 Git
 
 ```bash
 ./scripts/personal/dev test-scripts
-./scripts/personal/dev test-core
-./scripts/personal/dev test-swift
-# 有完整 Xcode 时，按 CI 范围跳过交互式 WebKit 测试：
+./scripts/personal/dev test-core --features personal-distribution
+# 以下两条需要完整 Xcode；分别验证上游模式与个人模式：
 ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests
+./scripts/personal/dev test-swift --filter 'PersonalDistributionTests|PersonalReleaseUpdateTests' -Xswiftc -DTOCCATA_PERSONAL
 git diff --check
 ```
 
-`test` 依次运行脚本、Rust、Swift 测试。当前 Command Line Tools 不包含 XCTest，Swift 测试会明确失败并显示未运行；不能把其他测试通过当作全套通过。WebKit 测试还需要交互式桌面。`core` 仅供明确需要采集测试时手动运行，只构建并运行 debug 服务，不接受 `--release` 等构建参数；不会被初始化、构建或启动开发 App 隐式调用。
+`test` 依次运行脚本、Rust、Swift 测试，CI 显式选择上述双模式与 WebKit 排除范围。只装 Command Line Tools 时，Swift 测试会明确报 XCTest 不可用；云端完整 Xcode 可以补充这些验证。报告中分别列出本地与云端结果、测试范围和跳过项，不能把脚本/Rust 通过等同于 XCTest 已运行。WebKit 测试还需要交互式桌面。`core` 仅供明确需要采集测试时手动运行，只构建并运行 debug 服务，不接受 `--release` 等构建参数；不会被初始化、构建或启动开发 App 隐式调用。
 
-截至 2026-11-01，SDK 26.2 已验证能构建并运行任务开发版；基线审查通过 39 项 Python 测试（含 14 项个人配置测试）、28 项 Rust 测试，以及入口的构建和签名检查。个人配置测试包含临时 Git 仓库中的实际 worktree 初始化和移除，验证了工具链共享、身份隔离及外置数据保留。Swift 测试仍缺少 XCTest。曾出现一次退出保存提示，后续 SDK 26.2 包装器/原生启动及 SDK 26.5 隔离对照未自然复现，原因仍未确认。不能记为已修复，也不能归因于 SDK。旧诊断记录保留在本机 `.local-dev/diagnostics/`；它们不是重建开发环境的依赖。
+早期本地环境限制、退出提示和各阶段验收结果归档于 [历史记录](personal-history.md)。当前验证以对应提交的日志为准，机器诊断文件不是新 worktree 的重建依赖。
 
-## 后续个人稳定版和手动更新
+## 个人发布与日用更新
 
-候选打包、固定 Tag 的正式打包、离线备份、迁移副本、成对安装与回滚已有独立入口。实际操作及演练见 [个人稳定版流程](personal-release.md)。维护命令默认只输出计划，安装和真实数据变更仍需单独授权；个人自动更新未实现，在线安装入口禁用。
+日常开发 CI、个人发布和日用 App 更新是独立操作：分支 push 只检查测试；新固定标签 push 触发构建和草稿上传；草稿经核验后确认发布；用户再手动下载安装。个人版可以检查更新、打开下载页，应用内自动下载安装保持禁用。
 
-个人稳定分发需要独立入口，不能通过把开发配置指向日用数据来冒充稳定安装器。
+发布步骤见 [个人稳定版流程](personal-release.md#个人-github-actions构建-dmg-并停在草稿)：验收改动并按授权合入个人主线，更新 `scripts/personal/release.json` 与对应发布说明，再创建并推送新的固定 annotated 标签。候选包用于独立身份和测试数据中的验收；正式发布必须基于已接受的干净提交，不能通过重定向开发数据路径冒充稳定版。
 
-1. 将验收过的功能合入个人主线，冻结干净提交。
-2. 从该提交构建候选包，在独立标识、偏好和测试数据的验收副本中验证。
-3. 记录个人版本、固定 Tag、完整 SHA、上游基线、SDK、架构和安装包校验值。
-4. 经用户授权，退出个人稳定版并做一致性备份，再手动替换个人稳定 App。
-5. 新版只迁移自己的稳定库；保留上一安装包和匹配的数据备份。回退 App 不代表数据库可以安全降级。
+已有个人版通常按 [普通 App 更新](personal-release.md#普通-app-更新)替换程序，继续使用原个人数据目录，不要求先执行数据迁移。备份根据当次授权安排，默认建议为有价值数据保留一致性快照；一次明确免备份的更新不代表后续默认免备份。新 App 启动时若升级数据库，是否能降级取决于版本兼容性，单独换回旧 App 不能恢复旧库。
 
-首次从上游正式版接管数据需要单独安排备份和副本验证，不复用上游的应用身份。不要直接复制仍在写入的单个 SQLite 文件；WAL 可能包含未合并数据。先验证备份与恢复，再考虑迁移日用记录。
+接管上游记录、转换数据路径或恢复旧状态时，使用 [数据维护流程](personal-maintenance.md)。`maintenance.py install` 始终备份并成对替换 App/数据，需要已准备的数据副本，不是免备份的 App 更新入口。迁移、备份、回滚和中断恢复各有不同作用，不能通过删除 live WAL/SHM 或 pending 标记绕过校验。源码合并、构建和发布均不自动授权这些操作。
 
 个人版本独立记录，已保留既有固定标签和安装包；当前个人稳定版为 `1.1.1 / build 3`，继续基于上游 `v0.1.4 / d5bd542`，发布说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。配置位于 `scripts/personal/release.json`；构建记录个人 Tag、SHA、SDK、架构和校验值，并验证已接受的干净提交。上游 `shared/app-version.json`、Rust 版本的一致性检查继续保留。新正式包须待验收、提交并合入个人主线，再获准创建新标签后生成；候选 ZIP 不能充当正式包安装，既有标签不移动或复用。
 
