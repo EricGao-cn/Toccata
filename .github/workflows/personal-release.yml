@@ -1,0 +1,144 @@
+name: Personal release draft
+run-name: Personal ${{ inputs.tag || github.ref_name }} · draft only
+
+on:
+  push:
+    tags:
+      - 'personal-v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing annotated personal-vX.Y.Z tag; no existing Release or draft'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: personal-release-${{ inputs.tag || github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    if: >-
+      github.repository == 'EricGao-cn/Toccata' &&
+      ((github.event_name == 'push' && startsWith(github.ref, 'refs/tags/personal-v')) ||
+       (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/codex/personal'))
+    runs-on: macos-26
+    timeout-minutes: 45
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      PERSONAL_TAG: ${{ inputs.tag || github.ref_name }}
+    outputs:
+      tag: ${{ steps.source.outputs.tag }}
+      commit: ${{ steps.source.outputs.commit }}
+      tag_object: ${{ steps.source.outputs.tag_object }}
+      archive_sha256: ${{ steps.bundle.outputs.archive_sha256 }}
+      artifact_id: ${{ steps.artifact.outputs.artifact-id }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          # Resolve from accepted code before executing anything inside a requested tag.
+          ref: codex/personal
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Resolve accepted annotated tag and remote release state
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -B scripts/personal/ci_release.py resolve --tag "$PERSONAL_TAG"
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ steps.source.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Validate exact checkout, configuration and committed notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+          TAG_OBJECT: ${{ steps.source.outputs.tag_object }}
+        run: |
+          python3 -B scripts/personal/ci_release.py check --tag "$PERSONAL_TAG" \
+            --commit "$SOURCE_COMMIT" --tag-object "$TAG_OBJECT"
+      - name: Prepare isolated SDK and Rust toolchain
+        run: |
+          test "$(uname -m)" = arm64
+          test -d "$DEVELOPER_DIR"
+          xcodebuild -version
+          ./scripts/personal/dev init --state-root "$RUNNER_TEMP/toccata-ci" --tools-root "$RUNNER_TEMP/toccata-tools"
+          ./scripts/personal/dev setup-rust
+          ./scripts/personal/dev check
+          ./scripts/personal/dev fetch
+      - name: Test scripts, personal core and Studio logic
+        run: |
+          ./scripts/personal/dev test-scripts
+          ./scripts/personal/dev test-core --features personal-distribution
+          # WebKit integration tests require an interactive desktop.
+          ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests -Xswiftc -DTOCCATA_PERSONAL
+          git diff --exit-code
+      - name: Build signed personal package and verified DMG
+        run: |
+          python3 -B scripts/personal/release.py build-release --tag "$PERSONAL_TAG"
+          python3 -B scripts/personal/publish.py prepare \
+            --package ".local-dev/personal-packages/$PERSONAL_TAG" \
+            --notes "docs/releases/$PERSONAL_TAG.md" --format dmg --output dist/personal-release
+      - name: Record verified build provenance and SHA-256
+        id: bundle
+        env:
+          SOURCE_COMMIT: ${{ steps.source.outputs.commit }}
+          TAG_OBJECT: ${{ steps.source.outputs.tag_object }}
+        run: |
+          python3 -B scripts/personal/ci_release.py verify --bundle dist/personal-release \
+            --tag "$PERSONAL_TAG" --commit "$SOURCE_COMMIT" --tag-object "$TAG_OBJECT"
+      - name: Preserve verified publication assets
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: personal-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/personal-release/
+          if-no-files-found: error
+          retention-days: 14
+
+  draft:
+    needs: build
+    runs-on: macos-26
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      actions: read
+    env:
+      PERSONAL_TAG: ${{ needs.build.outputs.tag }}
+      SOURCE_COMMIT: ${{ needs.build.outputs.commit }}
+      TAG_OBJECT: ${{ needs.build.outputs.tag_object }}
+      ARCHIVE_SHA256: ${{ needs.build.outputs.archive_sha256 }}
+      ARTIFACT_ID: ${{ needs.build.outputs.artifact_id }}
+    steps:
+      - name: Require the exact successful build artifact
+        # Failed-job reruns must keep using the original build's immutable artifact.
+        run: '[[ "$ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]'
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.build.outputs.commit }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.build.outputs.artifact_id }}
+          merge-multiple: true
+          path: dist/personal-release
+          # Use this run's REST listing across attempts, including failed-job reruns.
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: ${{ github.run_id }}
+      - name: Reverify downloaded DMG and create a new draft only
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 -B scripts/personal/ci_release.py draft --bundle dist/personal-release \
+            --tag "$PERSONAL_TAG" --commit "$SOURCE_COMMIT" --tag-object "$TAG_OBJECT" \
+            --archive-sha256 "$ARCHIVE_SHA256" --execute --ack-upload

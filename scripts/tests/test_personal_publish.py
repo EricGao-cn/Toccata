@@ -139,6 +139,24 @@ class PersonalPublishTests(unittest.TestCase):
         self.assertIn('--draft', calls[0])
         self.assertNotIn('--clobber', calls[0])
 
+    def test_changed_bundle_cannot_replace_the_ci_verified_build(self):
+        metadata = self.prepare()
+        expected = dict(metadata, commit='c' * 40)
+        with mock.patch.object(publish, 'github') as network:
+            with self.assertRaisesRegex(release.ReleaseError, 'expected verified build'):
+                publish.create_draft(self.bundle, expected_metadata=expected)
+            network.assert_not_called()
+
+    def test_malformed_remote_tag_responses_fail_before_draft_creation(self):
+        metadata = self.prepare()
+        for response in (None, [], {'object': None}, {'object': []}, {'object': {'type': 'tag'}}):
+            for responses in ([response], [{'object': {'type': 'tag', 'sha': metadata['tag_object']}}, response]):
+                with self.subTest(responses=responses), mock.patch.object(publish, 'github', side_effect=responses):
+                    with mock.patch.object(publish, 'draft_command') as mutation:
+                        with self.assertRaises(release.ReleaseError):
+                            publish.create_draft(self.bundle)
+                        mutation.assert_not_called()
+
     def test_cli_requires_ack_before_accessing_bundle_or_network(self):
         result = subprocess.run([sys.executable, '-B', str(ROOT / 'scripts/personal/publish.py'),
             'create-draft', '--bundle', str(self.root / 'missing'), '--execute'], text=True, capture_output=True)

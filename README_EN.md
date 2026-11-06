@@ -51,9 +51,9 @@ Update mirror `main` as upstream advances. Integrate upstream into the personal 
 
 ## Build and release
 
-Personal packages are currently built and verified locally with `scripts/personal/release.py`, then prepared as DMG (with ZIP compatibility) using `scripts/personal/publish.py` and uploaded to GitHub Releases. **Personal cloud builds through Actions are not configured yet.** The inherited upstream release workflow targets the upstream distribution and is not the personal publishing entry point.
+Personal packages are built and verified with `scripts/personal/release.py`, then prepared as DMG (with ZIP compatibility) using `scripts/personal/publish.py`. A separate [personal Actions workflow](.github/workflows/personal-release.yml) builds the DMG and SHA-256 and creates a Release draft when a new personal tag is pushed. It also supports manual runs from the personal mainline; final publication remains a maintainer decision. This entry point takes effect after integration and push. Existing 1.1.0 packages were built locally. The inherited upstream workflow targets the upstream distribution and is not the personal publishing entry point.
 
-Personal builds use SDK 26.2; upstream entry points retain their SDK 26.5 requirement. After acceptance and integration, authorize a new fixed tag, stable build, draft upload and final publication. Building, pushing, publishing and installing remain separate authorized steps; none implicitly replaces the daily-use App.
+Personal builds use SDK 26.2; upstream entry points retain their SDK 26.5 requirement. After acceptance and integration, authorize creation and push of a new fixed tag, which triggers building and draft upload; local manual packaging remains available. The workflow never overwrites an existing Release or draft or moves a tag. Final publication and installation require separate confirmation; none implicitly replaces the daily-use App. See the [personal Actions procedure](docs/personal-release.md#个人-github-actions构建-dmg-并停在草稿).
 
 ## Upstream and license
 

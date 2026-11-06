@@ -92,9 +92,33 @@ python3 -B scripts/personal/publish.py create-draft \
 
 上传入口固定仓库、核对远端 annotated 标签对象与提交、拒绝覆盖已有正式发布或草稿，再用 `gh release create --draft --verify-tag` 上传。联网前会复制并重新验证私有上传快照，上传只读取该快照，避免等待期间源文件的编辑混入。ZIP 的顶层内容必须是 App 和两个清单文件，归档名称中的架构须与包清单一致。GitHub CLI 需预先认证；接口失败或标签不匹配时拒绝写入。不自动发布、替换或删除草稿；上传失败时保留原素材目录与远端现场，先在 GitHub 检查，不盲目重试覆盖。
 
-5. 在 GitHub 草稿中人工核对版本、说明、ZIP 和校验值，**另行授权发布**后点击 Publish release，保持为正式版本。App 随后才能检测到它。历史版本和标签保留。
+5. 在 GitHub 草稿中人工核对版本、说明、DMG（或兼容 ZIP）和校验值，**另行授权发布**后点击 Publish release，保持为正式版本。App 随后才能检测到它。历史版本和标签保留。
 
 从发布页下载个人安装包 DMG，或历史版本保留的安装包 ZIP；GitHub 自动提供的 Source code 压缩包不是可运行安装包。DMG 挂载后、ZIP 解压后均含 `Toccata Personal.app` 和配套 `release.json`，也可作为下述维护安装入口的 `--package` 来源。GitHub 分发不替代已有数据备份；需要接管旧数据时才使用可选迁移流程。应用内一键安装保持禁用。当前 App 为 ad-hoc 签名，DMG 本身不会使其获得 Developer ID 公证。
+
+## 个人 GitHub Actions：构建 DMG 并停在草稿
+
+独立入口为 [personal-release.yml](../.github/workflows/personal-release.yml)，复用上述 `release.py`、`publish.py` 和 `disk_image.py`。上游 `release.yml` 保持原样。此入口需先验收、合入并推送后才会在 GitHub 生效；本地实现和测试不会触发它。
+
+启用后的触发方式：
+
+- **推送新个人标签**：`personal-vX.Y.Z` 的 tag push 自动开始构建并创建草稿。普通分支推送、上游标签和 PR 不触发。未来授权推送个人标签时，也应明确知道这会开始云端构建和草稿上传。
+- **手动重跑**：GitHub → Actions → Personal release draft → Run workflow，分支选 `codex/personal`，填写已推送的固定个人标签。只在尚无同名 Release 或草稿时可用；重跑不会覆盖之前的输出。
+
+新版本必须先更新 `scripts/personal/release.json` 的个人版本/build，以及 `docs/releases/personal-vX.Y.Z.md`，验收、提交并合入个人主线后创建 annotated 标签。标签必须指向包含本工作流和 CI 入口的提交，且已纳入 `codex/personal`；版本、固定上游基线和工作区状态仍由正式打包入口核对。不要用旧 `personal-v1.1.0` 测试，也不要为重试移动或重用标签。本次接入不修改个人版本或既有发布。
+
+工作流只允许 `EricGao-cn/Toccata`，使用 Apple Silicon `macos-26` runner，显式选择 `/Applications/Xcode_26.2.app/Contents/Developer` 并检查 SDK 26.2、固定 Rust 版本和 arm64 架构。runner 若不再提供该 Xcode/SDK，构建直接失败，不退回默认 SDK。工具链、测试数据和输出都在临时 runner / `.local-dev` / `dist` 内，不需要本机配置、App 或数据库。
+
+两个 job 的职责与权限：
+
+1. **build（contents: read）**：先检出已接受的 `codex/personal`，用其中的校验脚本解析 annotated 标签并确认提交属于个人主线，之后才检出解析所得的精确 SHA；不先运行待校验标签里的脚本。再次核对标签对象未变、版本、上游基线、非空更新说明与远端同名发布，再初始化隔离环境，运行脚本回归测试、个人 core 测试和带个人编译标记的 Swift 测试。只读 token 的草稿可见性有限，最终防重检查仍在持写权限的 draft job 中执行。WebKit 交互测试仍跳过。构建完整 ad-hoc 签名 App，生成并只读挂载校验 DMG；将 DMG、两个清单及校验文件、更新说明、发布素材元数据作为 Actions artifact 保留 14 天。另将提交、标签对象和 DMG SHA-256 作为独立 job 输出。
+2. **draft（contents: write、actions: read）**：从精确构建提交检出代码，按 build 输出的固定 artifact ID，显式通过当前仓库和当前 workflow run 的 REST 接口下载素材。`actions: read` 只用于读取 artifact；ID 缺失或非法时失败，不退回下载全部 artifact。只重跑失败的草稿 job 时仍使用原成功 build 的 ID，不按新 attempt 猜测名称。再次核对固定标签、主线、App 签名、DMG 内容、清单、架构与独立 job 输出的 SHA-256，并将 artifact 更新说明与标签中的已提交原文比对。创建私有上传快照后，仅执行 `gh release create --draft --verify-tag`。上传后用认证的分页 Release 列表定位唯一草稿，再按数字 Release ID 回读状态、版本、说明和全部四个附件的 SHA-256，并再次检查远端标签对象和提交未变，通过后输出草稿链接；不使用仅针对已发布版本的按标签查询接口。`GH_TOKEN` 只传给校验/上传脚本；官方 checkout/download action 使用各自 job 的 token，checkout 不保留认证信息。不使用长期 PAT，不执行 push、移动标签、删除或覆盖资产。
+
+上传前校验失败不会创建草稿；上传中断或上传后回读失败可能留下需要检查的草稿，错误会提示先查看发布页，工作流不会自动重试、删除或覆盖它。同标签并发最多执行一个运行，不取消正在构建/上传的运行；GitHub 可能用较新的等待运行替换旧的等待运行。后来的运行若发现已有草稿/发布就失败并保留现场。先核对 Actions 日志、artifact 和 GitHub 草稿，再决定后续操作；不要自动清除失败草稿或重用已发布标签。
+
+正式发布始终在 GitHub 草稿核对后由维护者点击 **Publish release**，工作流没有 publish 模式。草稿不会被 App 的更新检查识别；发布也不会安装到本机。当前仍为 ad-hoc 签名、未公证，Actions 不会自动改变签名方式；本地手动打包和 ZIP 兼容入口继续可用。
+
+工具链参考：[macOS runner 镜像](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md)、[GitHub 事件](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)、[工作流权限](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#permissions)。首次远端运行前应确认仓库 Actions 已启用且策略允许固定 SHA 的官方 actions；之后另行授权推送和执行，不为本地验证修改仓库设置。
 
 ## 当前首次使用方案：全新个人数据，不迁移
 

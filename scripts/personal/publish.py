@@ -164,9 +164,11 @@ def remote_releases():
     raise release.ReleaseError('Release listing was incomplete; no changes made')
 
 
-def create_draft(bundle):
+def create_draft(bundle, *, expected_metadata=None):
     bundle = maintenance.safe_path(bundle)
     metadata = verify_bundle(bundle)
+    if expected_metadata is not None and metadata != expected_metadata:
+        raise release.ReleaseError('Publication assets differ from the expected verified build')
     # Keep the bytes approved by local validation separate from editable source
     # files for the entire network/upload operation. Never upload the live bundle.
     with tempfile.TemporaryDirectory(prefix='toccata-upload-') as temporary:
@@ -177,16 +179,26 @@ def create_draft(bundle):
         return upload_draft(snapshot, metadata)
 
 
-def upload_draft(snapshot, metadata):
+def check_remote_tag(metadata):
     reference = github(f'repos/{REPOSITORY}/git/ref/tags/{metadata["tag"]}')
-    if (reference.get('object', {}).get('type') != 'tag'
-            or reference['object'].get('sha') != metadata['tag_object']):
+    target = reference.get('object') if isinstance(reference, dict) else None
+    if (not isinstance(target, dict) or target.get('type') != 'tag'
+            or target.get('sha') != metadata['tag_object']):
         raise release.ReleaseError('Push the reviewed fixed annotated tag separately; remote tag does not match')
     tag = github(f'repos/{REPOSITORY}/git/tags/{metadata["tag_object"]}')
-    if tag.get('object', {}).get('type') != 'commit' or tag['object'].get('sha') != metadata['commit']:
+    target = tag.get('object') if isinstance(tag, dict) else None
+    if not isinstance(target, dict) or target.get('type') != 'commit' or target.get('sha') != metadata['commit']:
         raise release.ReleaseError('Remote tag commit differs from the package')
+
+
+def check_remote(metadata):
+    check_remote_tag(metadata)
     if any(item.get('tag_name') == metadata['tag'] for item in remote_releases()):
         raise release.ReleaseError('Release or draft already exists; refusing to replace it')
+
+
+def upload_draft(snapshot, metadata):
+    check_remote(metadata)
     if verify_bundle(snapshot) != metadata:
         raise release.ReleaseError('Publication assets changed before upload')
     subprocess.run(draft_command(snapshot, metadata), check=True, timeout=600)

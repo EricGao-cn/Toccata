@@ -51,9 +51,9 @@
 
 ## 构建与发布
 
-当前个人包在本机通过 `scripts/personal/release.py` 构建、校验，再由 `scripts/personal/publish.py` 整理 DMG（兼容 ZIP）及发布素材，上传 GitHub Release。**个人版云端 Actions 构建尚未接入。** 仓库继承的上游发布工作流面向原版，不用来发布个人包。
+个人包通过 `scripts/personal/release.py` 构建、校验，再由 `scripts/personal/publish.py` 整理 DMG（兼容 ZIP）及发布素材。独立的 [个人 Actions 工作流](.github/workflows/personal-release.yml) 在推送新个人标签后自动构建 DMG、SHA-256 并创建 Release 草稿，也支持从个人主线手动运行；正式发布仍由维护者核对后确认。入口需先合入并推送后生效，既有 1.1.0 安装包仍来自此前本机构建。仓库继承的上游发布工作流面向原版，不用来发布个人包。
 
-个人构建使用 SDK 26.2；上游入口仍保留自己的 SDK 26.5 要求。已验收提交合入个人主线后，按授权创建新标签、构建正式包、上传草稿并确认发布。构建、推送、发布和安装分别授权，任何一步都不隐式替换日用 App。
+个人构建使用 SDK 26.2；上游入口仍保留自己的 SDK 26.5 要求。已验收提交合入个人主线后，按授权创建并推送新标签，触发构建和草稿上传；也可继续本机手动打包。工作流不覆盖同名发布或草稿，不移动标签。正式发布和安装分别确认，任何一步都不隐式替换日用 App。详见 [个人 Actions 流程](docs/personal-release.md#个人-github-actions构建-dmg-并停在草稿)。
 
 ## 上游与许可证
 
