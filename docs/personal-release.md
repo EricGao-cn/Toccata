@@ -65,12 +65,21 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.1.0
 python3 -B scripts/personal/publish.py prepare \
   --package /absolute/path/to/personal-v1.1.0 \
   --notes docs/releases/personal-v1.1.0.md \
+  --format dmg \
   --output /absolute/path/to/new-github-release-bundle
 python3 -B scripts/personal/publish.py plan \
   --bundle /absolute/path/to/new-github-release-bundle
 ```
 
-准备入口读取已验证正式包、固定标签和个人主线包含关系；只打包白名单中的 App、包内发布清单及其校验值，不收集包旁边的开发数据或运行目录。输出包括 `Toccata-Personal-<version>-<arch>.zip`、SHA-256、清单和说明。ZIP 会重新解压并验证签名、内容和执行权限。已有输出拒绝覆盖。
+准备入口读取已验证正式包、固定标签和个人主线包含关系；只打包白名单中的 App、包内发布清单及其校验值，不收集包旁边的开发数据或运行目录。默认输出 `Toccata-Personal-<version>-<arch>.dmg`、SHA-256、清单和发布说明；也可显式使用 `--format zip` 保持原 ZIP 分发方式。既有 ZIP 发布素材及其校验仍兼容，不覆盖已有输出。
+
+DMG 使用无加密、无交互许可协议的压缩只读 UDZO 容器。验证先制作校验值一致的私有镜像副本并设为只读文件，再仅将该副本只读挂载到私有目录；不会关闭或复用用户手动打开的原镜像。卷根目录只允许 App、两个清单文件和安装说明，隐藏目录也不豁免；读取 JSON/说明前检查文件类型和大小，拒绝符号链接、FIFO 及超大文本。App 签名、文件内容、权限和源镜像校验通过后，按私有副本对应的整盘设备正常推出，并再次确认设备及挂载点消失。若设备与其他镜像共用、归属无法确认、创建中断，或挂载/推出后无法确认设备已消失，工具保留现场和 recovery.json，不强制推出，不递归删除可能仍在使用的目录，也不发布半成品。ZIP 路径仍重新解压验证；两种格式都在校验结束后复核素材未变。整个过程不安装或启动 App。
+
+镜像根目录包含 `Toccata Personal.app`、`release.json`、清单校验值和 `安装说明.txt`。说明沿用个人安装位置 `~/Applications/Toccata Personal.app`，不写入构建机器用户名，也不放置指向系统 `/Applications` 的快捷方式，避免把现有个人安装混成两个入口。打开 DMG 后，在 Finder 用“前往文件夹”打开 `~/Applications`，退出旧个人版后拖入 App，推出镜像再启动。
+
+安装说明是有大小上限的 UTF-8 文本，并须标明对应个人版版本；验证不依赖当前工具的逐字文案，以便旧 DMG 在说明措辞更新后仍可校验。外层素材 SHA-256 继续核对原镜像的完整字节。
+
+仅将已验收 App 从 ZIP 改装进 DMG 时，应用版本、签名与原标签不变；当前已安装版本无需重装。给既有 Release 追加 DMG 和校验文件仍须单独授权，并先检查远端资产及发布策略；保留原 ZIP 链接，不移动标签或覆盖已发布资产。
 
 3. **另行授权**后将个人分支和固定标签推送到自己的仓库。本工具不执行 push，也不在远端自动创建标签。
 4. **获得上传授权**后创建 GitHub 草稿。默认仍只输出计划，实际上传要求两个执行标记：
@@ -85,7 +94,7 @@ python3 -B scripts/personal/publish.py create-draft \
 
 5. 在 GitHub 草稿中人工核对版本、说明、ZIP 和校验值，**另行授权发布**后点击 Publish release，保持为正式版本。App 随后才能检测到它。历史版本和标签保留。
 
-从发布页下载的是安装包 ZIP（不是 GitHub 自动提供的源码 ZIP）。解压后含 `Toccata Personal.app` 和配套 `release.json`；继续使用下述离线备份、迁移及安装入口。GitHub 分发不替代数据备份，首次接管上游数据仍须专门验证；本轮不实现一键安装。当前包为 ad-hoc 签名，实际下载后的系统放行体验留待获准安装时验证。
+从发布页下载个人安装包 DMG，或历史版本保留的安装包 ZIP；GitHub 自动提供的 Source code 压缩包不是可运行安装包。DMG 挂载后、ZIP 解压后均含 `Toccata Personal.app` 和配套 `release.json`，也可作为下述维护安装入口的 `--package` 来源。GitHub 分发不替代已有数据备份；需要接管旧数据时才使用可选迁移流程。应用内一键安装保持禁用。当前 App 为 ad-hoc 签名，DMG 本身不会使其获得 Developer ID 公证。
 
 ## 当前首次使用方案：全新个人数据，不迁移
 

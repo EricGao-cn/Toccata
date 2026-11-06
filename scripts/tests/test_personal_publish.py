@@ -40,7 +40,7 @@ class PersonalPublishTests(unittest.TestCase):
         self.provenance = patch.start(); self.addCleanup(patch.stop)
 
     def prepare(self):
-        return publish.prepare(self.package, self.notes, self.bundle)
+        return publish.prepare(self.package, self.notes, self.bundle, archive_format='zip')
 
     def refresh_checksums(self):
         path = self.bundle / 'github-release.json'
@@ -244,6 +244,58 @@ class PersonalPublishTests(unittest.TestCase):
              mock.patch.object(subprocess, 'run', side_effect=subprocess.CalledProcessError(1, ['git', 'merge-base'])):
             with self.assertRaises(subprocess.CalledProcessError):
                 real_provenance(self.manifest)
+
+    def test_dmg_preparation_and_verification_reuse_stable_provenance_without_network(self):
+        def build(package, destination):
+            self.assertEqual(release.verify_package(package), self.manifest)
+            destination.write_bytes(b'fixture disk image')
+            return self.manifest
+        with mock.patch.object(publish.disk_image, 'build_image', side_effect=build), \
+             mock.patch.object(publish.disk_image, 'verify_image', return_value=self.manifest) as verify, \
+             mock.patch.object(publish, 'github') as network:
+            metadata = publish.prepare(self.package, self.notes, self.bundle, archive_format='dmg')
+            self.assertEqual(publish.verify_bundle(self.bundle), metadata)
+            self.assertTrue(metadata['archive'].endswith('-arm64.dmg'))
+            self.assertTrue((self.bundle / (metadata['archive'] + '.sha256')).is_file())
+            verify.assert_called_once()
+            network.assert_not_called()
+            self.assertIn(str(self.bundle / metadata['archive']), publish.draft_command(self.bundle, metadata))
+
+    def test_unknown_container_format_stops_before_creating_output(self):
+        with self.assertRaises(release.ReleaseError):
+            publish.prepare(self.package, self.notes, self.bundle, archive_format='pkg')
+        self.assertFalse(self.bundle.exists())
+
+    def test_cli_defaults_to_dmg_and_keeps_explicit_zip_option(self):
+        for flags, expected in [([], 'dmg'), (['--format', 'zip'], 'zip')]:
+            args = ['publish.py', 'prepare', '--package', str(self.package), '--notes', str(self.notes), '--output', str(self.bundle), *flags]
+            with mock.patch.object(sys, 'argv', args), mock.patch.object(publish, 'prepare', return_value={}) as prepare, mock.patch('builtins.print'):
+                publish.main()
+                self.assertEqual(prepare.call_args.kwargs['archive_format'], expected)
+
+    def test_zip_bundle_changed_during_verification_is_rejected(self):
+        self.prepare()
+        unpack = publish.unpack_verified
+        def changed(*args):
+            manifest = unpack(*args)
+            (self.bundle / 'RELEASE.md').write_text('changed during verification')
+            return manifest
+        with mock.patch.object(publish, 'unpack_verified', side_effect=changed):
+            with self.assertRaisesRegex(release.ReleaseError, 'changed during'):
+                publish.verify_bundle(self.bundle)
+
+    def test_dmg_bundle_changed_during_verification_is_rejected(self):
+        def build(package, destination):
+            destination.write_bytes(b'fixture disk image')
+            return self.manifest
+        with mock.patch.object(publish.disk_image, 'build_image', side_effect=build):
+            publish.prepare(self.package, self.notes, self.bundle)
+        def changed(_):
+            (self.bundle / 'RELEASE.md').write_text('changed during mount')
+            return self.manifest
+        with mock.patch.object(publish.disk_image, 'verify_image', side_effect=changed):
+            with self.assertRaisesRegex(release.ReleaseError, 'changed during'):
+                publish.verify_bundle(self.bundle)
 
 
 if __name__ == '__main__':

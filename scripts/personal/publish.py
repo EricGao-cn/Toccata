@@ -14,6 +14,7 @@ import zipfile
 
 import maintenance
 import release
+import disk_image
 
 REPOSITORY = 'EricGao-cn/Toccata'
 VERSION = r'(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)'
@@ -53,7 +54,9 @@ def unpack_verified(archive, destination, tag):
     return manifest
 
 
-def prepare(package, notes, output):
+def prepare(package, notes, output, archive_format='dmg'):
+    if archive_format not in ['zip', 'dmg']:
+        raise release.ReleaseError('Choose zip or dmg as the release container')
     package, notes, output = map(maintenance.safe_path, [package, notes, output])
     maintenance.disjoint(package, notes, output)
     if output.exists():
@@ -79,12 +82,16 @@ def prepare(package, notes, output):
             shutil.copy2(package / name, staging / name)
         if release.verify_package(payload) != manifest or release.verify_package(package) != manifest:
             raise release.ReleaseError('Package changed while preparing the release')
-        filename = f'Toccata-Personal-{manifest["version"]}-{architecture}.zip'
+        filename = f'Toccata-Personal-{manifest["version"]}-{architecture}.{archive_format}'
         archive = staging / filename
-        subprocess.run(['/usr/bin/ditto', '--norsrc', '--noextattr', '--noacl', '-c', '-k', '--keepParent',
-                        str(payload), str(archive)], check=True)
-        if unpack_verified(archive, scratch / 'unpacked', manifest['tag']) != manifest:
-            raise release.ReleaseError('ZIP content differs from the verified package')
+        if archive_format == 'dmg':
+            if disk_image.build_image(payload, archive) != manifest:
+                raise release.ReleaseError('DMG content differs from the verified package')
+        else:
+            subprocess.run(['/usr/bin/ditto', '--norsrc', '--noextattr', '--noacl', '-c', '-k', '--keepParent',
+                            str(payload), str(archive)], check=True)
+            if unpack_verified(archive, scratch / 'unpacked', manifest['tag']) != manifest:
+                raise release.ReleaseError('ZIP content differs from the verified package')
         (staging / (filename + '.sha256')).write_text(release.sha256(archive) + '  ' + filename + '\n')
         (staging / 'RELEASE.md').write_text(notes.read_text())
         metadata = {'schema_version': 1, 'repository': REPOSITORY, 'tag': manifest['tag'],
@@ -107,7 +114,7 @@ def verify_bundle(bundle):
     if not re.fullmatch(VERSION, version) or tag != 'personal-v' + version:
         raise release.ReleaseError('Unexpected personal release tag')
     archive = metadata.get('archive', '')
-    if not re.fullmatch(r'Toccata-Personal-' + re.escape(version) + r'-(?:arm64|x86_64|universal)\.zip', archive):
+    if not re.fullmatch(r'Toccata-Personal-' + re.escape(version) + r'-(?:arm64|x86_64|universal)\.(?:zip|dmg)', archive):
         raise release.ReleaseError('Unexpected release archive name')
     files = release.tree_hashes(bundle)
     files.pop('github-release.json', None)
@@ -116,14 +123,19 @@ def verify_bundle(bundle):
     if (bundle / (archive + '.sha256')).read_text() != release.sha256(bundle / archive) + '  ' + archive + '\n':
         raise release.ReleaseError('Archive checksum mismatch')
     with tempfile.TemporaryDirectory(prefix='toccata-release-verify-') as temporary:
-        manifest = unpack_verified(bundle / archive, Path(temporary).resolve(), tag)
+        manifest = (disk_image.verify_image(bundle / archive) if archive.endswith('.dmg')
+                    else unpack_verified(bundle / archive, Path(temporary).resolve(), tag))
     if (manifest['tag'] != tag or manifest['version'] != version or manifest['commit'] != metadata.get('commit')
             or manifest['tag_object'] != metadata.get('tag_object')
             or manifest.get('architecture') not in ['arm64', 'x86_64', 'universal']
-            or archive != f'Toccata-Personal-{version}-{manifest.get("architecture")}.zip'
+            or archive != f'Toccata-Personal-{version}-{manifest.get("architecture")}.{Path(archive).suffix[1:]}'
             or json.loads((bundle / 'release.json').read_text()) != manifest
             or release.sha256(bundle / 'release.json') != (bundle / 'release.json.sha256').read_text().strip()):
         raise release.ReleaseError('Publication metadata differs from the verified archive')
+    after = release.tree_hashes(bundle)
+    after.pop('github-release.json', None)
+    if after != files or json.loads((bundle / 'github-release.json').read_text()) != metadata:
+        raise release.ReleaseError('Publication assets changed during archive verification')
     provenance(manifest)
     return metadata
 
@@ -189,6 +201,8 @@ def main():
     local.add_argument('--package', type=Path, required=True)
     local.add_argument('--notes', type=Path, required=True)
     local.add_argument('--output', type=Path, required=True)
+    local.add_argument('--format', dest='archive_format', choices=['zip', 'dmg'], default='dmg',
+                       help='Release container (default: dmg); zip is retained for compatibility')
     for name in ['plan', 'create-draft']:
         command = commands.add_parser(name)
         command.add_argument('--bundle', type=Path, required=True)
@@ -198,7 +212,7 @@ def main():
     args = parser.parse_args()
     try:
         if args.command == 'prepare':
-            result = prepare(args.package, args.notes, args.output)
+            result = prepare(args.package, args.notes, args.output, archive_format=args.archive_format)
         elif args.command == 'create-draft' and args.execute:
             if not args.ack_upload:
                 raise release.ReleaseError('Remote upload requires --execute --ack-upload and separate authorization')
