@@ -2,7 +2,7 @@
 
 ## 当前阶段和身份
 
-个人版本基于上游 `v0.1.4`，通过个人 GitHub Release 分发，本机手动安装。已保留的 `personal-v1.0.0` 标签和安装包不移动、不覆盖；本轮开发版本为 `1.1.0 / build 2`，须验收并获得授权后才能提交、打新标签和发布。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
+个人版本基于上游 `v0.1.4`，通过个人 GitHub Release 分发，本机手动安装。既有个人标签和安装包不移动、不覆盖；当前准备版本为 `1.1.1 / build 3`，发布说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。须验收并获得相应授权后才能提交、打新标签、推送和发布。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
 
 | 类型 | Bundle ID | 数据目录 | 采集与更新 |
 | --- | --- | --- | --- |
@@ -44,8 +44,8 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/candidate-direct
 4. 再执行正式构建：
 
 ```bash
-python3 -B scripts/personal/release.py build-release --tag personal-v1.1.0
-python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.1.0
+python3 -B scripts/personal/release.py build-release --tag personal-v1.1.1
+python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.1.1
 ```
 
 源码不干净、Tag 与 HEAD 不一致、不是 annotated Tag、提交未纳入个人主线、上游 Tag 与固定 SHA 不一致时，正式构建拒绝执行。不会自动提交、打 Tag、推送、发布、安装或启动。正式输出目录已存在时拒绝覆盖。
@@ -63,8 +63,8 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.1.0
 
 ```bash
 python3 -B scripts/personal/publish.py prepare \
-  --package /absolute/path/to/personal-v1.1.0 \
-  --notes docs/releases/personal-v1.1.0.md \
+  --package /absolute/path/to/personal-v1.1.1 \
+  --notes docs/releases/personal-v1.1.1.md \
   --format dmg \
   --output /absolute/path/to/new-github-release-bundle
 python3 -B scripts/personal/publish.py plan \
@@ -105,7 +105,7 @@ python3 -B scripts/personal/publish.py create-draft \
 - **推送新个人标签**：`personal-vX.Y.Z` 的 tag push 自动开始构建并创建草稿。普通分支推送、上游标签和 PR 不触发。未来授权推送个人标签时，也应明确知道这会开始云端构建和草稿上传。
 - **手动重跑**：GitHub → Actions → Personal release draft → Run workflow，分支选 `codex/personal`，填写已推送的固定个人标签。只在尚无同名 Release 或草稿时可用；重跑不会覆盖之前的输出。
 
-新版本必须先更新 `scripts/personal/release.json` 的个人版本/build，以及 `docs/releases/personal-vX.Y.Z.md`，验收、提交并合入个人主线后创建 annotated 标签。标签必须指向包含本工作流和 CI 入口的提交，且已纳入 `codex/personal`；版本、固定上游基线和工作区状态仍由正式打包入口核对。不要用旧 `personal-v1.1.0` 测试，也不要为重试移动或重用标签。本次接入不修改个人版本或既有发布。
+新版本必须先更新 `scripts/personal/release.json` 的个人版本/build，以及 `docs/releases/personal-vX.Y.Z.md`，验收、提交并合入个人主线后创建 annotated 标签。标签必须指向包含本工作流和 CI 入口的提交，且已纳入 `codex/personal`；版本、固定上游基线和工作区状态仍由正式打包入口核对。不要用旧 `personal-v1.1.0` 测试，也不要为重试移动或重用标签。首次云端构建使用新的 `personal-v1.1.1`，保留既有发布。
 
 工作流只允许 `EricGao-cn/Toccata`，使用 Apple Silicon `macos-26` runner，显式选择 `/Applications/Xcode_26.2.app/Contents/Developer` 并检查 SDK 26.2、固定 Rust 版本和 arm64 架构。runner 若不再提供该 Xcode/SDK，构建直接失败，不退回默认 SDK。工具链、测试数据和输出都在临时 runner / `.local-dev` / `dist` 内，不需要本机配置、App 或数据库。
 
