@@ -171,6 +171,8 @@ final class TaskStore: ObservableObject {
     /// Completing a parent completes every unfinished descendant at the same actual time.
     /// Existing descendant completion times remain intact. Reopening a task reopens its
     /// completed ancestors, while leaving its completed descendants unchanged.
+    /// Completing also drops pins from completed roots: finished work no longer floats
+    /// to the top, and pins kept by older versions are healed on the next completion.
     @discardableResult
     func setCompleted(id: String, completed: Bool) -> Bool {
         let shouldPlayCompletionFeedback = completed && task(id: id)?.isCompleted == false
@@ -187,6 +189,10 @@ final class TaskStore: ObservableObject {
                     UPDATE tasks SET completed_at = ?, updated_at = ?
                     WHERE id IN (SELECT id FROM descendants) AND completed_at IS NULL
                     """, [.text(id), .date(timestamp), .date(timestamp)])
+                try database.run("""
+                    UPDATE tasks SET is_pinned = 0, updated_at = ?
+                    WHERE parent_id IS NULL AND is_pinned = 1 AND completed_at IS NOT NULL
+                    """, [.date(timestamp)])
             } else {
                 try database.reopenAncestors(of: id, at: timestamp)
             }

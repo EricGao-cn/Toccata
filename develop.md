@@ -278,7 +278,7 @@ Fn（键码 `63`）的实际按住区间单独合并、裁剪和汇总，**不�
 
 Fork 后如需独立分发，应检查以下位置：
 
-- `UpdateChecker.swift` 中的 `ToccataReleaseSource.repository`：更新源、仓库链接及发布页面地址由此生成，按自己的仓库修改。用户在关于页检查、下载新版，并选择“安装并重启”；不在后台定时检查，也不上传任务或键盘记录。
+- `UpdateChecker.swift` 中的 `ToccataReleaseSource.repository`：更新源、仓库链接及发布页面地址由此生成，按自己的仓库修改。启动时静默检查一次新版本（发现新版时主页侧栏显示橙色光点），用户也可在关于页手动检查、下载新版，并选择“安装并重启”；不做后台定时检查，也不上传任务或键盘记录。
 - `scripts/build-app.sh` 中的 App 名称、Bundle ID 和签名要求，以及 `AppVersion.swift`、`UpdatePackagePreparer.swift`、`Resources/install-update.sh` 对应用身份的判断：改名或更换身份时保持一致。
 - `AppPaths.swift` 与 Rust `config.rs`：独立发行版如需默认使用自己的数据目录，应同步修改两端；开发调试可先使用 `TOCCATA_DATA_DIR`。
 - 品牌资源、系统本地化资源、`scripts/package-dmg.sh`、`scripts/create-github-release.sh` 与发布工作流中的产物命名；使用独立 LaunchAgent 时也需检查其标签与路径。

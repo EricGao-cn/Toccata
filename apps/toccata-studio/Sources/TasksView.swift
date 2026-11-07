@@ -419,6 +419,9 @@ struct TasksView: View {
                 // Animate pin changes even when they originate in another window.
                 .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder,
                            value: Set(store.tasks.filter { $0.parentID == nil && $0.isPinned }.map(\.id)))
+                // Completing moves a whole branch across the header; animate the slide.
+                .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder,
+                           value: Set(store.tasks.filter(\.isCompleted).map(\.id)))
             }
             .focusable()
             .focused($taskListFocused)

@@ -7,9 +7,11 @@ final class AboutWindowController {
     private var panel: NSPanel?
     private var languageSubscription: AnyCancellable?
     private let updater: AppUpdateController
+    private let checker: UpdateChecker
 
-    init(install: @escaping AppUpdateController.Install) {
+    init(install: @escaping AppUpdateController.Install, checker: UpdateChecker) {
         updater = AppUpdateController(install: install)
+        self.checker = checker
         languageSubscription = LanguageSettings.shared.$language.dropFirst()
             .receive(on: RunLoop.main).sink { [weak self] _ in
                 guard let panel = self?.panel else { return }
@@ -30,7 +32,7 @@ final class AboutWindowController {
             window.isReleasedWhenClosed = false
             window.hidesOnDeactivate = false
             window.collectionBehavior = [.moveToActiveSpace, .fullScreenAuxiliary]
-            let content = NSHostingView(rootView: AboutView(updater: updater))
+            let content = NSHostingView(rootView: AboutView(checker: checker, updater: updater))
             window.contentView = content
             window.setContentSize(content.fittingSize)
             window.center()

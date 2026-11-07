@@ -8,6 +8,7 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
     let loginItems = LoginItemController()
     let dockIcon = DockIconSettings()
     let hydrationReminders = HydrationReminderController()
+    let updateChecker = UpdateChecker()
     private let taskStore = TaskStore()
     private let taskMenu = TaskMenuController()
     private let coreProcess = CoreProcessController()
@@ -19,7 +20,7 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
         self.installUpdate(start: {
             try await prepared.startInstaller()
         }, failed: failed)
-    })
+    }, checker: updateChecker)
     private let hydrationWindow = HydrationReminderWindowController()
     private let workbenchNavigation = WorkbenchNavigation()
     private var workbench: NSWindow?
@@ -47,6 +48,8 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
         }
         dockIcon.applySavedPreference()
         refresher.start()
+        // Surface new releases on the sidebar without opening About first.
+        Task { await updateChecker.check() }
         hydrationReminders.start(refresher: refresher)
         coreProcess.start(requestPermission: false)
         healthTimer = Timer.scheduledTimer(withTimeInterval: 10, repeats: true) { [weak self] _ in
@@ -95,6 +98,7 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
                 .environmentObject(loginItems)
                 .environmentObject(dockIcon)
                 .environmentObject(hydrationReminders)
+                .environmentObject(updateChecker)
                 .frame(minWidth: 1040, minHeight: 650)
             let window = WorkbenchWindow(contentViewController: NSHostingController(rootView: content))
             window.title = "Toccata"

@@ -4,10 +4,16 @@ struct SidebarFooterView: View {
     @ObservedObject private var interfaceLanguage = LanguageSettings.shared
     var openAbout: () -> Void
     @EnvironmentObject private var appearance: AppearanceSettings
+    @EnvironmentObject private var updateChecker: UpdateChecker
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showsAppearancePicker = false
     @State private var showsLanguagePicker = false
     @State private var isAboutHovered = false
+
+    private var availableUpdate: AvailableUpdate? {
+        if case let .available(update) = updateChecker.state { return update }
+        return nil
+    }
 
     var body: some View {
         let _ = interfaceLanguage.language
@@ -84,11 +90,23 @@ struct SidebarFooterView: View {
                     .labelStyle(SidebarFooterLabelStyle())
                     .foregroundStyle(.primary)
                 Spacer(minLength: 4)
+                if let update = availableUpdate {
+                    // A quiet beacon: a newer release is waiting in About.
+                    Circle()
+                        .fill(Color.orange)
+                        .frame(width: 7, height: 7)
+                        .shadow(color: Color.orange.opacity(0.55), radius: 2.5)
+                        .padding(.trailing, 6)
+                        .transition(.scale.combined(with: .opacity))
+                        .accessibilityLabel(L10n.tr("发现新版本 v\(update.version)"))
+                }
                 Text(AppVersion.current.displayVersion)
                     .font(.system(size: 11))
                     .monospacedDigit()
                     .foregroundStyle(.secondary)
             }
+            .animation(reduceMotion ? nil : WorkspaceMotion.sidebarSelectionFade,
+                       value: updateChecker.state)
             .font(.system(size: 12))
             .lineLimit(1)
             .padding(.horizontal, 10)
@@ -101,8 +119,11 @@ struct SidebarFooterView: View {
         .onHover { isAboutHovered = $0 }
         .accessibilityIdentifier("sidebar-about-toccata")
         .accessibilityLabel(L10n.tr("关于 Toccata"))
-        .accessibilityValue(AppVersion.current.displayVersion)
-        .help(L10n.tr("查看版本信息与检查更新"))
+        .accessibilityValue(availableUpdate.map {
+            L10n.tr("\(AppVersion.current.displayVersion)，发现新版本 v\($0.version)")
+        } ?? AppVersion.current.displayVersion)
+        .help(availableUpdate.map { L10n.tr("发现新版本 v\($0.version)，点击查看更新") }
+              ?? L10n.tr("查看版本信息与检查更新"))
     }
 
     private var appearanceButton: some View {

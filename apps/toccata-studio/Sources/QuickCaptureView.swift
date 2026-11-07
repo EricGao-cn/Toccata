@@ -193,16 +193,24 @@ struct QuickCaptureView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     VStack(spacing: 0) {
-                        taskRows(pendingRoots)
-                        if !completedRoots.isEmpty {
-                            Text(L10n.tr("已完成"))
-                                .font(.system(size: 10))
-                                .foregroundStyle(TaskMenuStyle.secondary)
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .padding(.leading, 22)
-                                .padding(.top, 12)
-                                .padding(.bottom, 4)
-                            taskRows(completedRoots)
+                        // A task keeps one ForEach identity when completion moves it
+                        // across the section header, so the row slides instead of
+                        // being removed and reinserted.
+                        ForEach(listItems) { item in
+                            switch item {
+                            case .completedHeader:
+                                Text(L10n.tr("已完成"))
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(TaskMenuStyle.secondary)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .padding(.leading, 22)
+                                    .padding(.top, 12)
+                                    .padding(.bottom, 4)
+                                    .transition(reduceMotion ? .identity : WorkspaceMotion.branchTransition)
+                            case .row(let row):
+                                taskRow(row)
+                                    .transition(reduceMotion ? .identity : WorkspaceMotion.branchTransition)
+                            }
                         }
                     }
                     .animation(reduceMotion ? nil : WorkspaceMotion.branchChange,
@@ -211,6 +219,9 @@ struct QuickCaptureView: View {
                     // Animate pin changes even when they originate in another window.
                     .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder,
                                value: Set(tasks.tasks.filter { $0.parentID == nil && $0.isPinned }.map(\.id)))
+                    // Completing moves a whole branch below the header; animate the slide.
+                    .animation(reduceMotion ? nil : WorkspaceMotion.taskReorder,
+                               value: Set(tasks.tasks.filter(\.isCompleted).map(\.id)))
                 }
                 .scrollIndicators(.visible)
                 .background(TaskScrollerStyle())
@@ -222,12 +233,13 @@ struct QuickCaptureView: View {
         }
     }
 
-    private func taskRows(_ roots: [MenuTaskTreeNode]) -> some View {
-        ForEach(flatten(roots)) { row in
-            taskRow(row)
-                .id(row.id)
-                .transition(reduceMotion ? .identity : WorkspaceMotion.branchTransition)
+    private var listItems: [MenuTaskListItem] {
+        var items = flatten(pendingRoots).map(MenuTaskListItem.row)
+        if !completedRoots.isEmpty {
+            items.append(.completedHeader)
+            items += flatten(completedRoots).map(MenuTaskListItem.row)
         }
+        return items
     }
 
     private func taskRow(_ row: MenuTaskVisibleRow) -> some View {
@@ -485,6 +497,18 @@ private struct MenuTaskVisibleRow: Identifiable {
     let node: MenuTaskTreeNode
     let depth: Int
     var id: String { node.task.id }
+}
+
+private enum MenuTaskListItem: Identifiable {
+    case completedHeader
+    case row(MenuTaskVisibleRow)
+
+    var id: String {
+        switch self {
+        case .completedHeader: return "completed-header"
+        case .row(let row): return row.id
+        }
+    }
 }
 
 struct MenuTaskRowFrameKey: PreferenceKey {

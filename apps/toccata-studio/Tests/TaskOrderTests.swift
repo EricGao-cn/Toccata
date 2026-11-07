@@ -75,8 +75,11 @@ final class TaskOrderTests: XCTestCase {
             let m = try add("M", to: store, planned: 200)
             let completedZ = try add("Z completed", to: store, planned: 300, done: true)
             let completedA = try add("A completed", to: store, planned: 100, done: true)
-            let completedPinnedZ = try add("Z completed pin", to: store, planned: 300, done: true, pinned: true)
-            let completedPinnedA = try add("A completed pin", to: store, planned: 100, done: true, pinned: true)
+            let completedPinnedZ = try add("Z completed pin", to: store, planned: 300, done: true)
+            let completedPinnedA = try add("A completed pin", to: store, planned: 100, done: true)
+            // Completion drops pins, so build the completed-pinned group by pinning afterwards.
+            XCTAssertTrue(store.setPinned(id: completedPinnedZ, pinned: true))
+            XCTAssertTrue(store.setPinned(id: completedPinnedA, pinned: true))
             // Seed manual ranks that conflict with the requested automatic order.
             XCTAssertTrue(store.moveTask(id: pinnedZ, relativeTo: pinnedA, placement: .before))
             XCTAssertTrue(store.moveTask(id: completedZ, relativeTo: completedA, placement: .before))
