@@ -343,7 +343,7 @@ git diff --check
 
 产物为 `dist/Toccata-<version>-<arch>.dmg` 及同名 `.sha256` 文件。版本取自 App 的 `CFBundleShortVersionString`，架构由工作台与内嵌服务的实际二进制判定，可为 `arm64`、`x86_64` 或 `universal`。构建与打包都通过 `scripts/macos-toolchain.sh` 要求当前 SDK 为 **26.5**，并检查两个二进制记录的实际 SDK；`--skip-build` 也会拒绝使用旧 SDK 的缓存 App。脚本还验证签名与架构一致性，使用 `hdiutil` 生成 UDZO 映像并验证 SHA-256；同版本、同架构的旧产物在新包验证成功后替换。
 
-DMG 包含 App、“应用程序”快捷方式和安装说明。脚本只生成文件，不安装或启动 App，也不修改登录项或系统权限。
+DMG 打开后是引导式安装窗口：背景图讲解“拖进应用程序”和首次打开被拦截时的三步放行流程，App 与“应用程序”快捷方式摆在预留位置；安装说明以隐藏文件附带。窗口坐标、图标大小与 bounds 来自 `scripts/dmg-assets/DS_Store` 模板；背景源文件为 `background.html`，改设计后跑 `render-background.sh` 重新生成（需 Chrome）。背景别名与卷绑定，因此打包时先建读写映像、由 Finder 在该卷上设置背景（会短暂打开一个 Finder 窗口，需自动化权限），再转换为 UDZO。脚本只生成文件，不安装或启动 App，也不修改登录项或系统权限。
 
 默认 ad-hoc 包用于开发与验证，打包脚本不执行 Apple 公证。`TOCCATA_SIGN_IDENTITY` 仅用于选择签名身份；正式分发还需自行配置 Developer ID、Hardened Runtime、公证与票据装订。
 

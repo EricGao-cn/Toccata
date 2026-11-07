@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!--
+  Toccata DMG background art, 960x740 pt (rendered @2x, 144 dpi).
+  Finder draws the Toccata.app / Applications icons and their labels itself;
+  this artwork must leave those spots empty (centers at 256,253 and 700,250).
+  Regenerate with render-background.sh after editing.
+-->
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 960px; height: 740px; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", sans-serif;
+    background: #f4f4f6; color: #1d1d1f; overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  .stage { position: absolute; left: 0; top: 0; width: 1280px; height: 986px;
+    transform: scale(0.75); transform-origin: 0 0; }
+
+  h1 { position: absolute; top: 52px; width: 100%; text-align: center; font-size: 34px; font-weight: 800; letter-spacing: 1px; }
+  .sub1 { position: absolute; top: 120px; width: 100%; text-align: center; font-size: 20px; color: #6e6e73; }
+  .arrow { position: absolute; left: 497px; top: 312px; }
+
+  h2 { position: absolute; top: 523px; width: 100%; text-align: center; font-size: 25px; font-weight: 800; letter-spacing: .5px; }
+  .sub2 { position: absolute; top: 574px; width: 100%; text-align: center; font-size: 18px; color: #6e6e73; }
+
+  .card { position: absolute; top: 633px; width: 374px; height: 330px; background: #fff; border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.05); }
+  .card1 { left: 48px; } .card2 { left: 453px; } .card3 { left: 858px; }
+  .mock { position: absolute; left: 16px; top: 16px; width: 342px; height: 210px; background: #ececee; border-radius: 12px; overflow: hidden; }
+  .cap { position: absolute; top: 240px; width: 100%; display: flex; align-items: center; justify-content: center; gap: 10px; }
+  .num { width: 27px; height: 27px; border-radius: 50%; background: #4772fa; color: #fff; font-size: 16px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center; }
+  .cap b { font-size: 19px; font-weight: 800; }
+  .cap-sub { position: absolute; top: 279px; width: 100%; text-align: center; font-size: 15px; color: #6e6e73; }
+
+  .ring { box-shadow: 0 0 0 3px #fff, 0 0 0 6px #4772fa; }
+
+  /* card 1: blocked dialog */
+  .dialog { position: absolute; left: 40px; top: 22px; width: 262px; height: 166px; background: #fdfdfd; border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.10); text-align: center; }
+  .dialog img { width: 34px; height: 34px; margin-top: 12px; border-radius: 8px; }
+  .dialog .t { font-size: 15px; font-weight: 700; margin-top: 4px; }
+  .line { height: 6px; border-radius: 3px; background: #d9d9de; margin: 8px auto 0; }
+  .btns { display: flex; justify-content: center; gap: 8px; margin-top: 14px; }
+  .pill { font-size: 13px; font-weight: 600; padding: 6px 16px; border-radius: 999px; background: #e8e8ec; color: #3a3a3c; }
+  .pill.blue { background: #1f6ff2; color: #fff; }
+
+  /* card 2: system settings */
+  .settings { position: absolute; left: 42px; top: 18px; width: 262px; height: 176px; background: #f6f6f8; border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.08); }
+  .side { position: absolute; left: 0; top: 0; bottom: 0; width: 128px; background: #ececef; border-radius: 10px 0 0 10px; padding: 16px 12px; }
+  .dotline { display: flex; align-items: center; gap: 7px; margin-bottom: 12px; }
+  .dotline i { width: 9px; height: 9px; border-radius: 50%; background: #c9c9cf; }
+  .dotline em { height: 6px; border-radius: 3px; background: #d9d9de; flex: 1; }
+  .privacy { position: absolute; left: 8px; top: 96px; width: 118px; padding: 7px 0; text-align: center;
+    background: #1f6ff2; color: #fff; font-size: 13px; font-weight: 700; border-radius: 8px; }
+  .pane { position: absolute; left: 140px; top: 16px; right: 12px; }
+  .pane .line { margin: 0 0 12px; }
+
+  /* card 3: security pane */
+  .security { position: absolute; left: 40px; top: 22px; width: 262px; height: 166px; background: #fdfdfd; border-radius: 10px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.10); padding: 18px 20px; }
+  .security .t { font-size: 15px; font-weight: 700; }
+  .security hr { border: none; border-top: 1px solid #e3e3e8; margin: 12px 0; }
+  .security .msg { font-size: 13px; color: #6e6e73; }
+  .security .pill { display: inline-block; margin-top: 14px; background: #f0f0f2; }
+</style>
+</head>
+<body>
+  <div class="stage">
+    <h1>把 Toccata 拖进应用程序</h1>
+    <div class="sub1">然后在应用程序或启动台里打开它</div>
+
+    <svg class="arrow" width="290" height="50" viewBox="0 0 290 50">
+      <line x1="6" y1="25" x2="252" y2="25" stroke="#4772fa" stroke-width="6" stroke-linecap="round" stroke-dasharray="0.1 17"/>
+      <path d="M258 6 L283 25 L258 44" fill="none" stroke="#4772fa" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+
+    <h2>第一次打开会被拦一下，别担心</h2>
+    <div class="sub2">Toccata 尚未公证，照下面放行一次，以后就能直接打开</div>
+
+    <div class="card card1">
+      <div class="mock">
+        <div class="dialog">
+          <img src="appicon.png">
+          <div class="t">未打开 Toccata</div>
+          <div class="line" style="width: 190px;"></div>
+          <div class="line" style="width: 150px;"></div>
+          <div class="btns">
+            <span class="pill">移到废纸篓</span>
+            <span class="pill blue ring">完成</span>
+          </div>
+        </div>
+      </div>
+      <div class="cap"><span class="num">1</span><b>点完成或好</b></div>
+      <div class="cap-sub">别点移到废纸篓</div>
+    </div>
+
+    <div class="card card2">
+      <div class="mock">
+        <div class="settings">
+          <div class="side">
+            <div class="dotline"><i></i><em></em></div>
+            <div class="dotline"><i></i><em></em></div>
+            <div class="dotline"><i></i><em></em></div>
+          </div>
+          <div class="privacy ring">隐私与安全性</div>
+          <div class="pane">
+            <div class="line" style="width: 100%;"></div>
+            <div class="line" style="width: 88%;"></div>
+            <div class="line" style="width: 94%;"></div>
+            <div class="line" style="width: 72%;"></div>
+            <div class="line" style="width: 85%;"></div>
+          </div>
+        </div>
+      </div>
+      <div class="cap"><span class="num">2</span><b>打开系统设置</b></div>
+      <div class="cap-sub">左边选隐私与安全性</div>
+    </div>
+
+    <div class="card card3">
+      <div class="mock">
+        <div class="security">
+          <div class="t">安全性</div>
+          <hr>
+          <div class="msg">已阻止 Toccata 以保护 Mac</div>
+          <span class="pill ring">仍要打开</span>
+        </div>
+      </div>
+      <div class="cap"><span class="num">3</span><b>点仍要打开</b></div>
+      <div class="cap-sub">在安全性一栏，按提示输密码确认</div>
+    </div>
+  </div>
+</body>
+</html>
