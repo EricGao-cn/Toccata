@@ -64,7 +64,7 @@ final class TaskPinningTests: XCTestCase {
         XCTAssertEqual(reopenedAgain.task(id: original.id)?.plannedDate, original.plannedDate)
     }
 
-    func testPinPersistsAndEditingOtherFieldsDoesNotClearIt() async throws {
+    func testPinPersistsThroughEditsAndIsClearedByCompletion() async throws {
         let url = try databaseURL()
         var now = Date(timeIntervalSince1970: 1_792_339_200)
         let store = TaskStore(databaseURL: url, now: { now }, completionFeedback: {})
@@ -82,9 +82,10 @@ final class TaskPinningTests: XCTestCase {
         XCTAssertTrue(store.updateTask(id: id, title: "修改名称", details: "写下任务详情", plannedDate: plan))
         XCTAssertEqual(store.task(id: id)?.isPinned, true)
         XCTAssertTrue(store.setCompleted(id: id, completed: true))
+        XCTAssertFalse(try XCTUnwrap(store.task(id: id)).isPinned, "Completion must drop the pin")
 
         let restored = TaskStore(databaseURL: url)
-        XCTAssertEqual(restored.task(id: id)?.isPinned, true)
+        XCTAssertEqual(restored.task(id: id)?.isPinned, false)
         XCTAssertEqual(restored.task(id: id)?.title, "修改名称")
         XCTAssertEqual(restored.task(id: id)?.details, "写下任务详情")
         XCTAssertEqual(restored.task(id: id)?.plannedDate, plan)
@@ -97,6 +98,42 @@ final class TaskPinningTests: XCTestCase {
         XCTAssertFalse(restored.setPinned(id: "missing", pinned: true))
         XCTAssertNotNil(restored.errorMessage)
         XCTAssertEqual(restored.task(id: id)?.isPinned, false)
+    }
+
+    func testCompletionUnpinsCompletedRootButKeepsPendingRootPinned() async throws {
+        let url = try databaseURL()
+        let store = TaskStore(databaseURL: url, completionFeedback: {})
+        let parent = try XCTUnwrap(store.addTask(title: "主任务"))
+        let child = try XCTUnwrap(store.addTask(title: "子任务", parentID: parent))
+        XCTAssertTrue(store.setPinned(id: child, pinned: true))
+
+        // Completing only a child leaves the pending root and its pin in place.
+        XCTAssertTrue(store.setCompleted(id: child, completed: true))
+        XCTAssertTrue(store.isPinned(id: parent))
+        XCTAssertTrue(store.isPinned(id: child))
+
+        // Completing the root moves the whole branch down and drops the pin.
+        XCTAssertTrue(store.setCompleted(id: parent, completed: true))
+        XCTAssertFalse(store.isPinned(id: parent))
+        XCTAssertFalse(store.isPinned(id: child))
+        XCTAssertEqual(TaskStore(databaseURL: url, completionFeedback: {}).task(id: parent)?.isPinned, false)
+
+        // Reopening does not restore the old pin.
+        XCTAssertTrue(store.setCompleted(id: parent, completed: false))
+        XCTAssertFalse(store.isPinned(id: parent))
+    }
+
+    func testCompletionHealsPinsKeptOnAlreadyCompletedRoots() async throws {
+        let url = try databaseURL()
+        let store = TaskStore(databaseURL: url, completionFeedback: {})
+        let legacy = try XCTUnwrap(store.addTask(title: "旧版完成仍置顶"))
+        XCTAssertTrue(store.setCompleted(id: legacy, completed: true))
+        XCTAssertTrue(store.setPinned(id: legacy, pinned: true))
+        XCTAssertTrue(store.isPinned(id: legacy))
+
+        let other = try XCTUnwrap(store.addTask(title: "新完成"))
+        XCTAssertTrue(store.setCompleted(id: other, completed: true))
+        XCTAssertFalse(store.isPinned(id: legacy), "The next completion heals legacy pinned-completed roots")
     }
 
     func testExistingPriorityValuesDoNotBecomePinsDuringMigration() async throws {

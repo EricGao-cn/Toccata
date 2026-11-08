@@ -15,7 +15,10 @@ Build Toccata, then create dist/Toccata-<version>-<arch>.dmg and its SHA-256 fil
   --skip-build  Package the existing dist/Toccata.app after validation.
   -h, --help    Show this help.
 
-The DMG contains Toccata.app, an Applications shortcut, and installation notes.
+The DMG opens as a styled install window (drag Toccata onto Applications,
+with first-launch Gatekeeper guidance). Installation notes are included
+as a hidden file. Layout assets live in scripts/dmg-assets. Packaging
+briefly opens a Finder window to bind the background to the volume.
 This script does not install the app, launch it, or change login items or permissions.
 USAGE
 }
@@ -102,12 +105,53 @@ Toccata 安装说明
 打开磁盘映像和拖拽安装不会自动修改登录项或输入监控权限。
 INSTALL
 
+# Styled install window: background art plus a Finder layout template for
+# window bounds and icon positions. The background alias is volume-specific
+# and is bound by Finder on the staging volume below. Regenerate the artwork
+# with scripts/dmg-assets/render-background.sh after editing the design.
+mkdir -p "$PAYLOAD/.background"
+/bin/cp "$ROOT/scripts/dmg-assets/background.png" "$PAYLOAD/.background/background.png"
+/bin/cp "$ROOT/scripts/dmg-assets/DS_Store" "$PAYLOAD/.DS_Store"
+/usr/bin/chflags hidden "$PAYLOAD/安装说明.txt"
+
 # Validate the copied payload before creating the final read-only image.
 /usr/bin/codesign --verify --deep --strict "$PAYLOAD/Toccata.app"
 DMG_NAME="Toccata-$VERSION-$ARCH.dmg"
 STAGED_DMG="$STAGING/$DMG_NAME"
-/usr/bin/hdiutil create -volname Toccata -srcfolder "$PAYLOAD" -fs HFS+ \
-    -format UDZO -imagekey zlib-level=9 "$STAGED_DMG"
+
+# The background alias in .DS_Store is volume-specific, so it must be created
+# on the final volume: stage read-write, let Finder bind the background, then
+# convert (block-level copy keeps the volume UUID, so the alias survives).
+# The committed DS_Store template supplies window bounds, icon size/positions.
+if [ -e /Volumes/Toccata ]; then
+    printf 'Eject the mounted "Toccata" volume before packaging.\n' >&2
+    exit 1
+fi
+PAYLOAD_MB="$(/usr/bin/du -sm "$PAYLOAD" | /usr/bin/cut -f1)"
+RW_DMG="$STAGING/readwrite.dmg"
+/usr/bin/hdiutil create -size "$((PAYLOAD_MB + 32))m" -fs HFS+ -volname Toccata "$RW_DMG" -quiet
+/usr/bin/hdiutil attach "$RW_DMG" -nobrowse -quiet
+cleanup() {
+    if /usr/bin/hdiutil info | /usr/bin/grep -q "$RW_DMG"; then
+        /usr/bin/hdiutil detach /Volumes/Toccata -quiet 2>/dev/null || true
+    fi
+    rm -rf "$STAGING"
+}
+trap cleanup EXIT
+/usr/bin/ditto "$PAYLOAD" /Volumes/Toccata
+/usr/bin/osascript <<'APPLESCRIPT'
+tell application "Finder"
+    tell disk "Toccata"
+        open
+        set background picture of icon view options of container window to ¬
+            (POSIX file "/Volumes/Toccata/.background/background.png")
+        close
+    end tell
+end tell
+delay 1
+APPLESCRIPT
+/usr/bin/hdiutil detach /Volumes/Toccata -quiet
+/usr/bin/hdiutil convert "$RW_DMG" -format UDZO -imagekey zlib-level=9 -o "$STAGED_DMG" -quiet
 /usr/bin/hdiutil verify "$STAGED_DMG"
 (
     cd "$STAGING"

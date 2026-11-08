@@ -6,6 +6,6 @@
   "app_name": "Toccata Personal",
   "data_directory_name": "Toccata-Personal",
   "sdk_version": "26.2",
-  "upstream_tag": "v0.1.4",
-  "upstream_sha": "d5bd5424cba00a6c24f2fd634841960e6b69c105"
+  "upstream_tag": "v0.1.5",
+  "upstream_sha": "40d06410c4101687f32a80e399dc63c4354005f1"
 }

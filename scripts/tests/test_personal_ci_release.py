@@ -33,7 +33,7 @@ class PersonalCIReleaseTests(unittest.TestCase):
         self.git('commit', '-qm', 'Upstream fixture')
         self.git('tag', 'v0.1.4')
         settings = json.loads((ROOT / 'scripts/personal/release.json').read_text())
-        settings.update(version='1.2.3', upstream_sha=self.git('rev-parse', 'HEAD'))
+        settings.update(version='1.2.3', upstream_tag='v0.1.4', upstream_sha=self.git('rev-parse', 'HEAD'))
         config = self.root / 'scripts/personal/release.json'
         config.parent.mkdir(parents=True)
         config.write_text(json.dumps(settings))

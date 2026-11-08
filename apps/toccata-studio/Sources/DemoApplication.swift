@@ -179,6 +179,7 @@ private final class DemoApplicationDelegate: NSObject, NSApplicationDelegate {
             .environmentObject(loginItems)
             .environmentObject(dockIcon)
             .environmentObject(reminders)
+            .environmentObject(UpdateChecker())
             .environment(\.colorScheme, appearance.mode == .dark ? .dark : .light)
             .environment(\.locale, LanguageSettings.shared.language.locale)
         try await capture(content, size: size, filename: filename)

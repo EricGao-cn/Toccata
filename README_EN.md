@@ -47,7 +47,7 @@ Existing users can check for a personal release from About Toccata and open its 
 
 ## Data and privacy
 
-Tasks, daily notes and keyboard activity stay on your Mac. Keyboard tracking captures no typed text, screenshots or audio. Manually checking for updates contacts the personal GitHub release source.
+Tasks, daily notes and keyboard activity stay on your Mac. Keyboard tracking captures no typed text, screenshots or audio. Checking for updates contacts the personal GitHub release source.
 
 Daily notes are Markdown files in `~/Library/Application Support/Toccata-Personal/daily-notes/`, accessible through the App's note-folder action. The personal and upstream Apps store data separately, so you can retain the original App and records.
 

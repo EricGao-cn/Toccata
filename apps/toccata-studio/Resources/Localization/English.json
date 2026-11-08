@@ -22,6 +22,8 @@
   "当前已是最新版本": "You're up to date",
   "当前版本 {0}": "Current version {0}",
   "发现新版本 v{0}": "Version v{0} is available",
+  "发现新版本 v{0}，点击查看更新": "Version v{0} is available — click to view the update",
+  "{0}，发现新版本 v{1}": "{0} — version v{1} is available",
   "今日": "Today",
   "昨日": "Yesterday",
   "最近 7 天": "Last 7 days",

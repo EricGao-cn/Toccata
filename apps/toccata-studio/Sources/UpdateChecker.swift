@@ -153,7 +153,7 @@ struct ReleaseUpdateService {
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("2026-03-10", forHTTPHeaderField: "X-GitHub-Api-Version")
         request.setValue("Toccata/\(current.version)", forHTTPHeaderField: "User-Agent")
-        // Only a manual, anonymous version request; no task or keyboard records are sent.
+        // Only an anonymous version request (launch-time or manual); no task or keyboard records are sent.
         let (data, response) = try await transport(request)
         guard let http = response as? HTTPURLResponse, http.url == url else { throw UpdateCheckFailure.invalidResponse }
         switch http.statusCode {

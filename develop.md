@@ -278,7 +278,7 @@ Fn（键码 `63`）的实际按住区间单独合并、裁剪和汇总，**不�
 
 Fork 后如需独立分发，应检查以下位置：
 
-- `UpdateChecker.swift` 中的 `ToccataReleaseSource.repository`：更新源、仓库链接及发布页面地址由此生成，按自己的仓库修改。用户在关于页检查、下载新版，并选择“安装并重启”；不在后台定时检查，也不上传任务或键盘记录。
+- `UpdateChecker.swift` 中的 `ToccataReleaseSource.repository`：更新源、仓库链接及发布页面地址由此生成，按自己的仓库修改。启动时静默检查一次新版本（发现新版时主页侧栏显示橙色光点），用户也可在关于页手动检查、下载新版，并选择“安装并重启”；不做后台定时检查，也不上传任务或键盘记录。
 - `scripts/build-app.sh` 中的 App 名称、Bundle ID 和签名要求，以及 `AppVersion.swift`、`UpdatePackagePreparer.swift`、`Resources/install-update.sh` 对应用身份的判断：改名或更换身份时保持一致。
 - `AppPaths.swift` 与 Rust `config.rs`：独立发行版如需默认使用自己的数据目录，应同步修改两端；开发调试可先使用 `TOCCATA_DATA_DIR`。
 - 品牌资源、系统本地化资源、`scripts/package-dmg.sh`、`scripts/create-github-release.sh` 与发布工作流中的产物命名；使用独立 LaunchAgent 时也需检查其标签与路径。
@@ -343,7 +343,7 @@ git diff --check
 
 产物为 `dist/Toccata-<version>-<arch>.dmg` 及同名 `.sha256` 文件。版本取自 App 的 `CFBundleShortVersionString`，架构由工作台与内嵌服务的实际二进制判定，可为 `arm64`、`x86_64` 或 `universal`。构建与打包都通过 `scripts/macos-toolchain.sh` 要求当前 SDK 为 **26.5**，并检查两个二进制记录的实际 SDK；`--skip-build` 也会拒绝使用旧 SDK 的缓存 App。脚本还验证签名与架构一致性，使用 `hdiutil` 生成 UDZO 映像并验证 SHA-256；同版本、同架构的旧产物在新包验证成功后替换。
 
-DMG 包含 App、“应用程序”快捷方式和安装说明。脚本只生成文件，不安装或启动 App，也不修改登录项或系统权限。
+DMG 打开后是引导式安装窗口：背景图讲解“拖进应用程序”和首次打开被拦截时的三步放行流程，App 与“应用程序”快捷方式摆在预留位置；安装说明以隐藏文件附带。窗口坐标、图标大小与 bounds 来自 `scripts/dmg-assets/DS_Store` 模板；背景源文件为 `background.html`，改设计后跑 `render-background.sh` 重新生成（需 Chrome）。背景别名与卷绑定，因此打包时先建读写映像、由 Finder 在该卷上设置背景（会短暂打开一个 Finder 窗口，需自动化权限），再转换为 UDZO。脚本只生成文件，不安装或启动 App，也不修改登录项或系统权限。
 
 默认 ad-hoc 包用于开发与验证，打包脚本不执行 Apple 公证。`TOCCATA_SIGN_IDENTITY` 仅用于选择签名身份；正式分发还需自行配置 Developer ID、Hardened Runtime、公证与票据装订。
 
