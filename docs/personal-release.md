@@ -4,7 +4,7 @@
 
 截至 2026-11-06，个人版发布、日常开发 CI 和手动更新均已验收使用。本页描述当前流程；早期“只准备、不安装”等限制与当时的测试结果见 [历史验收记录](personal-history.md)。文档描述能力，不构成一次新的执行授权。
 
-个人版本通过个人 GitHub Release 分发，本机手动安装。既有个人标签和安装包不移动、不覆盖；当前个人稳定版为 `1.1.1 / build 3`，基于上游 `v0.1.4`，已通过 Actions 构建并核验后正式发布，说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。当前源码已吸收上游 `v0.1.5`；此同步不产生新的个人发布，下一版需另行确定版本号和固定标签。后续版本须验收并获得相应授权后才能提交、打新标签、推送和发布。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
+个人版本通过个人 GitHub Release 分发，本机手动安装。既有个人标签和安装包不移动、不覆盖；当前个人稳定版为 `1.1.1 / build 3`，基于上游 `v0.1.4`，已通过 Actions 构建并核验后正式发布，说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。待发布个人版为 `1.2.0 / build 4`，基于上游 `v0.1.5 / 40d0641`，说明见 [personal-v1.2.0](releases/personal-v1.2.0.md)。Actions 构建 DMG 并停在 Release 草稿，正式发布和日用 App 更新仍是独立步骤，分别按当次授权执行。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
 
 | 类型 | Bundle ID | 数据目录 | 采集与更新 |
 | --- | --- | --- | --- |
