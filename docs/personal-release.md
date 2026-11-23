@@ -2,9 +2,9 @@
 
 ## 当前状态与身份
 
-截至 2026-11-06，个人版发布、日常开发 CI 和手动更新均已验收使用。本页描述当前流程；早期“只准备、不安装”等限制与当时的测试结果见 [历史验收记录](personal-history.md)。文档描述能力，不构成一次新的执行授权。
+个人版发布、日常开发 CI 和手动更新均已验收使用。本页描述当前流程；早期“只准备、不安装”等限制与当时的测试结果见 [历史验收记录](personal-history.md)。文档描述能力，不构成一次新的执行授权。
 
-个人版本通过个人 GitHub Release 分发，本机手动安装。既有个人标签和安装包不移动、不覆盖；当前个人稳定版为 `1.1.1 / build 3`，基于上游 `v0.1.4`，已通过 Actions 构建并核验后正式发布，说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。待发布个人版为 `1.2.0 / build 4`，基于上游 `v0.1.5 / 40d0641`，说明见 [personal-v1.2.0](releases/personal-v1.2.0.md)。Actions 构建 DMG 并停在 Release 草稿，正式发布和日用 App 更新仍是独立步骤，分别按当次授权执行。配置位于 `scripts/personal/release.json`，不会改写上游 `shared/app-version.json` 或移动上游标签。
+个人版本通过个人 GitHub Release 分发，本机手动安装。当前个人稳定版为 `1.2.0 / build 4`，基于上游 `v0.1.5 / 40d0641`，见 [1.2.0 版本说明](releases/personal-v1.2.0.md)。待发布的 `1.2.1 / build 5` 沿用同一上游基线，修复每日记录编辑，见 [1.2.1 版本说明](releases/personal-v1.2.1.md)。Actions 构建 DMG 并停在 Release 草稿，正式发布和日用 App 更新仍是独立步骤，分别按当次授权执行。配置位于 `scripts/personal/release.json`，保留既有个人标签、安装包及上游版本配置。
 
 | 类型 | Bundle ID | 数据目录 | 采集与更新 |
 | --- | --- | --- | --- |
@@ -80,11 +80,11 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/candidate-direct
 1. 更新 `scripts/personal/release.json` 的个人版本/build 和对应发布说明；待发布改动完成测试、审查和隔离验收，按授权提交并合入 `codex/personal`。
 2. 选定最终个人版本，在该已接受的干净提交创建固定的 **annotated** `personal-v<version>` Tag；不移动或复用个人 Tag，不覆盖任何上游 Tag。
 3. 记录提交 SHA、Tag 对象和固定上游基线；构建后记录实际 SDK、架构、安装包及清单的 SHA-256。
-4. 选择 Actions 构建或下方本地备用入口。示例中的 `personal-v1.2.0` 仅为新版本示例；实际标签须匹配版本配置、已创建且尚未发布。既有 `personal-v1.1.1` 不移动、不复用：
+4. 选择 Actions 构建或下方本地备用入口。示例使用 `personal-v1.2.1`，实际标签须匹配版本配置、已创建且尚未发布。保留所有既有标签。
 
 ```bash
-python3 -B scripts/personal/release.py build-release --tag personal-v1.2.0
-python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.2.0
+python3 -B scripts/personal/release.py build-release --tag personal-v1.2.1
+python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.2.1
 ```
 
 源码不干净、Tag 与 HEAD 不一致、不是 annotated Tag、提交未纳入个人主线、上游 Tag 与固定 SHA 不一致时，正式构建拒绝执行。不会自动提交、打 Tag、推送、发布、安装或启动。正式输出目录已存在时拒绝覆盖。
@@ -98,8 +98,8 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.2.0
 
 ```bash
 python3 -B scripts/personal/publish.py prepare \
-  --package /absolute/path/to/personal-v1.2.0 \
-  --notes docs/releases/personal-v1.2.0.md \
+  --package /absolute/path/to/personal-v1.2.1 \
+  --notes docs/releases/personal-v1.2.1.md \
   --format dmg \
   --output /absolute/path/to/new-github-release-bundle
 python3 -B scripts/personal/publish.py plan \
