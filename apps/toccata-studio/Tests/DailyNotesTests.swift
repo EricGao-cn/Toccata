@@ -1,4 +1,6 @@
+import AppKit
 import Foundation
+import SwiftUI
 import XCTest
 @testable import toccata_studio
 
@@ -157,6 +159,114 @@ final class DailyNotesTests: XCTestCase {
         XCTAssertNil(pending.consume(for: day))
     }
 
+    func testInsertTimeAtSelectionAndSyncUndoRedoWithDraft() async throws {
+        let store = try savedFixture()
+        let original = "开头🙂结尾"
+        store.update(day, text: original)
+        let presentation = DailyNoteEditorTestPresentation()
+        let window = editorWindow(DailyNoteEditorTestView(notes: store, presentation: presentation, day: day))
+        defer { window.close() }
+        try await settleEditor(in: window)
+        let editor = try XCTUnwrap(nativeEditor(in: window.contentView))
+        editor.setSelectedRange((original as NSString).range(of: "🙂"))
+        presentation.command = DailyNoteEditorCommand(action: .insertTime, day: day)
+        try await settleEditor(in: window)
+
+        let inserted = editor.string
+        XCTAssertNotNil(inserted.range(of: #"^开头\n\n## \d{2}:\d{2}\n结尾$"#, options: .regularExpression))
+        XCTAssertEqual(store.documents[day]?.text, inserted)
+        XCTAssertTrue(window.firstResponder === editor)
+
+        let undo = try XCTUnwrap(editor.undoManager)
+        XCTAssertTrue(undo.canUndo)
+        undo.undo()
+        XCTAssertEqual(editor.string, original)
+        XCTAssertEqual(store.documents[day]?.text, original)
+        XCTAssertTrue(undo.canRedo)
+        undo.redo()
+        XCTAssertEqual(editor.string, inserted)
+        XCTAssertEqual(store.documents[day]?.text, inserted)
+        XCTAssertTrue(store.savePendingDrafts())
+        XCTAssertEqual(try String(contentsOf: store.fileURL(day), encoding: .utf8), inserted)
+    }
+
+    func testLeavingEditorSavesComposedTextAndClearsItsUndoHistory() async throws {
+        let store = try fixture()
+        let presentation = DailyNoteEditorTestPresentation()
+        let window = editorWindow(DailyNoteEditorTestView(notes: store, presentation: presentation, day: day, usesDocumentEditor: true))
+        defer { window.close() }
+        try await settleEditor(in: window)
+        let editor = try XCTUnwrap(nativeEditor(in: window.contentView))
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        let undo = try XCTUnwrap(editor.undoManager)
+        XCTAssertFalse(undo === window.undoManager)
+
+        editor.insertText("草稿 ", replacementRange: editor.selectedRange())
+        editor.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0), replacementRange: editor.selectedRange())
+        XCTAssertTrue(editor.hasMarkedText())
+        XCTAssertTrue(undo.canUndo)
+        presentation.isVisible = false
+        try await settleEditor(in: window)
+
+        XCTAssertNil(nativeEditor(in: window.contentView))
+        XCTAssertFalse(undo.canUndo)
+        XCTAssertFalse(window.undoManager?.canUndo ?? false)
+        XCTAssertEqual(try String(contentsOf: store.fileURL(day), encoding: .utf8), "草稿 中文")
+
+        presentation.isVisible = true
+        try await settleEditor(in: window)
+        let reopened = try XCTUnwrap(nativeEditor(in: window.contentView))
+        XCTAssertEqual(reopened.string, "草稿 中文")
+        XCTAssertFalse(reopened.undoManager?.canUndo ?? false)
+    }
+
+    func testExternalReloadPreservesPendingCompositionAsAConflict() async throws {
+        let store = try savedFixture()
+        let presentation = DailyNoteEditorTestPresentation()
+        let window = editorWindow(DailyNoteEditorTestView(notes: store, presentation: presentation, day: day, usesDocumentEditor: true))
+        defer { window.close() }
+        try await settleEditor(in: window)
+        let editor = try XCTUnwrap(nativeEditor(in: window.contentView))
+        XCTAssertTrue(window.makeFirstResponder(editor))
+        let end = (editor.string as NSString).length
+        editor.setMarkedText("中文", selectedRange: NSRange(location: 2, length: 0), replacementRange: NSRange(location: end, length: 0))
+        XCTAssertTrue(editor.hasMarkedText())
+
+        try Data("external".utf8).write(to: store.fileURL(day), options: .atomic)
+        store.refresh()
+        try await settleEditor(in: window)
+        presentation.isVisible = false
+        try await settleEditor(in: window)
+
+        XCTAssertEqual(try String(contentsOf: store.fileURL(day), encoding: .utf8), "external")
+        XCTAssertEqual(store.documents[day]?.text, "original中文")
+        XCTAssertTrue(store.conflicts.contains(day))
+        store.resolveConflict(day, keepLocal: false)
+        XCTAssertEqual(store.documents[day]?.text, "external")
+        XCTAssertEqual(try backups(store), ["original中文"])
+    }
+
+    private func editorWindow<Content: View>(_ content: Content) -> NSWindow {
+        _ = NSApplication.shared
+        let window = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 550, height: 350),
+                              styleMask: [.titled], backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        window.contentView = NSHostingView(rootView: content.frame(width: 550, height: 350))
+        return window
+    }
+
+    private func settleEditor(in window: NSWindow) async throws {
+        for _ in 0..<5 {
+            window.contentView?.layoutSubtreeIfNeeded()
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
+    }
+
+    private func nativeEditor(in view: NSView?) -> NSTextView? {
+        if let editor = view as? NSTextView { return editor }
+        return view?.subviews.lazy.compactMap { self.nativeEditor(in: $0) }.first
+    }
+
     func testDeletedUnreadableFileClearsItsReadError() throws {
         let store = try savedFixture()
         let badDay = "2026-11-01"
@@ -220,5 +330,31 @@ final class DailyNotesTests: XCTestCase {
     private func backups(_ store: DailyNotesStore) throws -> [String] {
         try FileManager.default.contentsOfDirectory(at: store.directory.appendingPathComponent("Backups"), includingPropertiesForKeys: nil)
             .map { try String(contentsOf: $0, encoding: .utf8) }
+    }
+}
+
+@MainActor
+private final class DailyNoteEditorTestPresentation: ObservableObject {
+    @Published var command: DailyNoteEditorCommand?
+    @Published var isVisible = true
+}
+
+@MainActor
+private struct DailyNoteEditorTestView: View {
+    @ObservedObject var notes: DailyNotesStore
+    @ObservedObject var presentation: DailyNoteEditorTestPresentation
+    let day: String
+    var usesDocumentEditor = false
+
+    var body: some View {
+        if presentation.isVisible {
+            if usesDocumentEditor {
+                DailyNoteDocumentEditor(notes: notes, day: day)
+            } else {
+                DailyNoteTextEditor(notes: notes, day: day, command: presentation.command)
+            }
+        } else {
+            Color.clear
+        }
     }
 }

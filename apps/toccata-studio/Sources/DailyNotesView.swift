@@ -9,7 +9,7 @@ final class DailyNotesNavigation: ObservableObject {
 
 @MainActor
 struct DailyNoteDocumentEditor: View {
-    @ObservedObject private var notes = DailyNotesStore.shared
+    @ObservedObject var notes = DailyNotesStore.shared
     let day: String
     var compact = false
     var focusRequest: UUID?
@@ -51,10 +51,8 @@ struct DailyNoteDocumentEditor: View {
             .padding(.horizontal, compact ? 12 : 16)
             .padding(.vertical, 9)
             if let document = notes.documents[day] {
-                DailyNoteTextEditor(text: Binding(
-                    get: { notes.documents[day]?.text ?? document.text },
-                    set: { notes.update(day, text: $0) }
-                ), day: day, surface: compact ? "menu" : "workbench", focusRequest: focusRequest, command: command, fontSize: compact ? 13 : 14)
+                DailyNoteTextEditor(notes: notes, day: day, surface: compact ? "menu" : "workbench",
+                                    focusRequest: focusRequest, command: command, fontSize: compact ? 13 : 14)
                 .id(day)
                 .overlay(alignment: .topLeading) {
                     if document.text.isEmpty {

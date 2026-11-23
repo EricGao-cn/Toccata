@@ -50,6 +50,9 @@ final class DailyNotesStore: ObservableObject, PendingDraftSaving {
     @Published private(set) var conflicts: Set<String> = []
     @Published private(set) var scanError: String?
     private var saveTask: Task<Void, Never>?
+    private let documentReloads = PassthroughSubject<String, Never>()
+
+    var willReloadDocument: AnyPublisher<String, Never> { documentReloads.eraseToAnyPublisher() }
 
     init(directory: URL, registerForQuit: Bool = true) {
         self.directory = directory
@@ -76,6 +79,10 @@ final class DailyNotesStore: ObservableObject, PendingDraftSaving {
         guard DailyNoteDate.date(day) != nil else { return }
         do {
             let data = try read(day)
+            if let current = documents[day], current.diskData != data {
+                // Finish input against the original disk baseline before accepting a new one.
+                documentReloads.send(day)
+            }
             if let current = documents[day], current.isDirty {
                 if current.diskData != data { reportConflict(day) }
                 return
@@ -164,7 +171,9 @@ final class DailyNotesStore: ObservableObject, PendingDraftSaving {
 
     /// A resolution always preserves the displaced version in a separate backup.
     func resolveConflict(_ day: String, keepLocal: Bool) {
-        guard var document = documents[day], conflicts.contains(day) else { return }
+        guard conflicts.contains(day) else { return }
+        documentReloads.send(day)
+        guard var document = documents[day] else { return }
         do {
             let current = try read(day)
             let externalText = keepLocal ? "" : try decode(current)
