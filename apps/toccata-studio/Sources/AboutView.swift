@@ -132,7 +132,7 @@ struct AboutView: View {
             .padding(12).frame(maxWidth: .infinity, alignment: .leading)
             .background(Color.accentColor.opacity(0.055), in: RoundedRectangle(cornerRadius: 12))
 
-            if PersonalDistribution.isPersonal {
+            if !PersonalDistribution.supportsInAppUpdates {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
                         Label(L10n.tr("个人版更新"), systemImage: "arrow.triangle.2.circlepath").font(.headline)
@@ -163,7 +163,8 @@ struct AboutView: View {
             } else {
                 VStack(alignment: .leading, spacing: 12) {
                     HStack {
-                        Label(L10n.tr("软件更新"), systemImage: "arrow.triangle.2.circlepath").font(.headline)
+                        Label(PersonalDistribution.isPersonal ? L10n.tr("个人版更新") : L10n.tr("软件更新"),
+                              systemImage: "arrow.triangle.2.circlepath").font(.headline)
                         Spacer()
                         if checker.state == .checking || updater.state == .verifying || updater.state == .installing {
                             ProgressView().controlSize(.small).accessibilityLabel(progressLabel)
@@ -214,7 +215,7 @@ struct AboutView: View {
                 Text(L10n.tr("当前版本 \(version.displayVersion)")).font(.callout).foregroundStyle(.secondary)
             case let .available(update):
                 Text(L10n.tr("发现新版本 v\(update.version)")).fontWeight(.semibold).foregroundStyle(Color.accentColor)
-                Text(PersonalDistribution.isPersonal
+                Text(!PersonalDistribution.supportsInAppUpdates
                      ? L10n.tr("打开个人版下载页，查看更新说明和安装包。")
                      : (update.package == nil
                         ? L10n.tr("此版本暂无可自动安装的兼容安装包，请查看发布页面。")

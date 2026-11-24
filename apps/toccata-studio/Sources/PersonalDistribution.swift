@@ -18,6 +18,8 @@ enum PersonalDistribution {
         #endif
     }
 
+    static var supportsInAppUpdates: Bool { !isCandidate }
+
     static var dataDirectory: URL? {
         guard isPersonal else { return nil }
         let support = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")

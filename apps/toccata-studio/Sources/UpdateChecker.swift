@@ -5,10 +5,22 @@ enum ReleaseChannel {
     case upstream, personal
 
     var repository: String { self == .personal ? "EricGao-cn/Toccata" : "KMnO4-zx/Toccata" }
+    var appName: String { self == .personal ? "Toccata Personal.app" : "Toccata.app" }
+    var bundleIdentifier: String { self == .personal ? "cn.ericgao.toccata.personal" : "com.toccata.studio" }
+    var executableName: String { self == .personal ? "ToccataPersonal" : "Toccata" }
     var releasesURL: URL { URL(string: "https://github.com/\(repository)/releases")! }
     var latestAPIURL: URL { URL(string: "https://api.github.com/repos/\(repository)/releases/latest")! }
     func releasesAPIURL(page: Int) -> URL {
         URL(string: "https://api.github.com/repos/\(repository)/releases?per_page=100&page=\(page)")!
+    }
+
+    func packageName(version: String, architecture: String) -> String {
+        let prefix = self == .personal ? "Toccata-Personal" : "Toccata"
+        return "\(prefix)-\(version)-\(architecture).dmg"
+    }
+
+    func packageURL(tag: String, name: String) -> URL {
+        releasesURL.appendingPathComponent("download").appendingPathComponent(tag).appendingPathComponent(name)
     }
 }
 
@@ -96,33 +108,39 @@ struct ReleaseUpdateService {
 
     func check(current: AppVersion, architecture: String = UpdatePackage.architecture) async throws -> AvailableUpdate? {
         guard let installed = ReleaseVersion(current.version) else { throw UpdateCheckFailure.invalidResponse }
-        if channel == .personal { return try await checkPersonal(current: current, installed: installed) }
+        if channel == .personal { return try await checkPersonal(current: current, installed: installed, architecture: architecture) }
         let data = try await fetch(channel.latestAPIURL, current: current)
         guard let release = try? JSONDecoder().decode(GitHubRelease.self, from: data),
               !release.draft, !release.prerelease,
               let latest = ReleaseVersion(release.tagName) else { throw UpdateCheckFailure.invalidResponse }
         guard latest > installed else { return nil }
+        return availableUpdate(release, version: latest, architecture: architecture)
+    }
+
+    private func availableUpdate(_ release: GitHubRelease, version latest: ReleaseVersion, architecture: String) -> AvailableUpdate {
         // Construct all destinations from the fixed channel, never response URLs.
         let pageURL = channel.releasesURL.appendingPathComponent("tag").appendingPathComponent(release.tagName)
         let version = "\(latest.major).\(latest.minor).\(latest.patch)"
+        if channel == .personal && !PersonalDistribution.supportsInAppUpdates {
+            return AvailableUpdate(version: version, pageURL: pageURL)
+        }
         var package: UpdatePackage?
         for arch in [architecture, "universal"] {
-            let name = "Toccata-\(version)-\(arch).dmg"
+            let name = channel.packageName(version: version, architecture: arch)
             let matching = (release.assets ?? []).filter { $0.name == name }
             guard matching.count == 1, let asset = matching.first,
                   asset.state == "uploaded", asset.size > 0, asset.size <= 1_073_741_824,
                   let digest = asset.digest, digest.hasPrefix("sha256:") else { continue }
             let hash = String(digest.dropFirst(7))
             guard hash.count == 64, hash.utf8.allSatisfy({ (48...57).contains($0) || (97...102).contains($0) }) else { continue }
-            package = UpdatePackage(url: channel.releasesURL.appendingPathComponent("download")
-                .appendingPathComponent(release.tagName).appendingPathComponent(name), size: asset.size, sha256: hash)
+            package = UpdatePackage(url: channel.packageURL(tag: release.tagName, name: name), size: asset.size, sha256: hash)
             break
         }
         return AvailableUpdate(version: version, pageURL: pageURL, package: package)
     }
 
-    private func checkPersonal(current: AppVersion, installed: ReleaseVersion) async throws -> AvailableUpdate? {
-        var newest: (ReleaseVersion, String)?
+    private func checkPersonal(current: AppVersion, installed: ReleaseVersion, architecture: String) async throws -> AvailableUpdate? {
+        var newest: (ReleaseVersion, GitHubRelease)?
         // A fork may contain upstream releases. Inspect personal tags across pages,
         // compare numeric versions, and never use GitHub's cross-channel "latest".
         for page in 1...10 {
@@ -133,14 +151,12 @@ struct ReleaseUpdateService {
                 guard release.tagName.hasPrefix("personal-v") else { continue }
                 let numeric = String(release.tagName.dropFirst("personal-v".count))
                 guard let version = ReleaseVersion(numeric), numeric == "\(version.major).\(version.minor).\(version.patch)" else { continue }
-                if newest == nil || version > newest!.0 { newest = (version, release.tagName) }
+                if newest == nil || version > newest!.0 { newest = (version, release) }
             }
             if releases.count < 100 {
-                guard let (version, tag) = newest else { throw UpdateCheckFailure.noAccessibleRelease }
+                guard let (version, release) = newest else { throw UpdateCheckFailure.noAccessibleRelease }
                 guard version > installed else { return nil }
-                // Personal builds expose only a browser page, never an installer package.
-                return AvailableUpdate(version: "\(version.major).\(version.minor).\(version.patch)",
-                    pageURL: channel.releasesURL.appendingPathComponent("tag").appendingPathComponent(tag))
+                return availableUpdate(release, version: version, architecture: architecture)
             }
         }
         // An incomplete scan must not claim that an installation is up to date.

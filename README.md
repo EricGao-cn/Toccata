@@ -43,7 +43,7 @@ Toccata Personal 是一个 macOS 菜单栏应用，将每日 Markdown 记录、�
 
 App 常驻菜单栏，关闭工作台后仍可在后台运行。外观、语言、登录自启、Dock 显示和喝水提醒可在通用配置中调整。
 
-已有个人版可通过“关于 Toccata → 个人版更新”检查新版并打开下载页，更新时手动替换 App，继续使用原数据目录。当前安装包未做 Developer ID 公证；具体步骤见 [安装与更新说明](docs/personal-release.md#普通-app-更新)。
+支持应用内更新的个人稳定版可从“关于 Toccata → 个人版更新”下载新版，随后点击“安装并重启”。早期个人版需先手动替换 App 一次。两种方式都沿用原数据目录。安装包未做 Developer ID 公证，具体步骤见 [安装与更新说明](docs/personal-release.md#普通-app-更新)。
 
 ## 数据与隐私
 

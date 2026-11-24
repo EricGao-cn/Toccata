@@ -439,11 +439,29 @@ class PersonalReleaseTests(unittest.TestCase):
                                 stopped_check=self.check_stopped, package_check=self.package_check)
         self.assertFalse((self.root / 'backup').exists())
 
-    def test_package_tampering_and_manual_update_policy_are_checked(self):
+    def test_package_tampering_is_rejected(self):
         package = self.make_package()
         self.package_check(package)
         (package / 'Toccata Personal.app/Contents/MacOS/toccata-core').write_text('changed helper')
         with self.assertRaises(release.ReleaseError): self.package_check(package)
+
+    def test_update_mode_accepts_historical_stable_and_restricts_candidates(self):
+        package = self.make_package()
+        app = package / 'Toccata Personal.app'
+        info = app / 'Contents/Info.plist'
+        self.package_check(package)  # Historical personal stable releases use manual mode.
+        manifest = json.loads((package / 'release.json').read_text())
+        values = plistlib.loads(info.read_bytes())
+        values['ToccataUpdateMode'] = 'in-app'
+        info.write_bytes(plistlib.dumps(values))
+        manifest['files'] = release.tree_hashes(app)
+        release.verify_payload(app, manifest, verify_signature=False)
+        values['ToccataDistributionChannel'] = 'personal-candidate'
+        info.write_bytes(plistlib.dumps(values))
+        manifest['channel'] = 'personal-candidate'
+        manifest['files'] = release.tree_hashes(app)
+        with self.assertRaisesRegex(release.ReleaseError, 'update policy'):
+            release.verify_payload(app, manifest, verify_signature=False)
 
     def test_stable_packaging_requires_clean_fixed_tag_and_accepted_commit(self):
         settings = release.config()

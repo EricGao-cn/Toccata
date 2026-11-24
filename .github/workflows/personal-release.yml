@@ -85,11 +85,10 @@ jobs:
         run: |
           # WebKit integration tests require an interactive desktop.
           ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests
-      - name: Test personal distribution and manual-update guards
+      - name: Test personal distribution and updates
         timeout-minutes: 15
         run: |
-          # Upstream automatic-installation tests intentionally require a different policy.
-          # PersonalReleaseUpdateTests also proves download/preparation/installation stay blocked.
+          # Exercise the personal release source, package validation and data guards.
           ./scripts/personal/dev test-swift --filter 'PersonalDistributionTests|PersonalReleaseUpdateTests' -Xswiftc -DTOCCATA_PERSONAL
           git diff --exit-code
       - name: Build signed personal package and verified DMG

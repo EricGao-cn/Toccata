@@ -43,7 +43,7 @@ Download and verify the DMG, place `Toccata Personal.app` in `~/Applications`, e
 
 The App stays in the menu bar and can keep running with its workspace closed. General settings provide appearance, language, launch at login, Dock visibility and water reminders.
 
-Existing users can check for a personal release from About Toccata and open its download page. Replace the App manually to update, keeping the existing data directory. The current package has not been Developer ID notarized; see [installation and update instructions](docs/personal-release.md#普通-app-更新).
+Personal stable builds with in-app updates can download a newer release under About Toccata and choose Install and Restart. Earlier personal builds need one manual App replacement. Both paths keep the existing data directory. Packages have not been notarized by Apple. See the [installation and update instructions](docs/personal-release.md#普通-app-更新).
 
 ## Data and privacy
 

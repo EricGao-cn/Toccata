@@ -34,7 +34,10 @@ class UpdateInstallerTests(unittest.TestCase):
         self.parent = subprocess.Popen(["/bin/sleep", "30"])
         self.process = None
         self.environment = dict(os.environ, UPDATE_TEST_ROOT=str(self.root), UPDATE_TEST_STAGED=str(self.staged))
-        self.signer = self.stub("signer", 'test "${UPDATE_TEST_BAD_SIGNATURE:-0}" != 1\n')
+        self.signer = self.stub("signer", '''
+test "${UPDATE_TEST_BAD_SIGNATURE:-0}" != 1
+if [ "$1" = -d ]; then printf 'CDHash=%s\\n' "$(cat "$3/signed-hash")"; fi
+''')
         self.launcher = self.stub("launcher", '''
 printf '%s\\n' "$@" >> "$UPDATE_TEST_ROOT/launched.txt"
 case "$*" in *--update-failed*) exit 0 ;; esac
@@ -70,9 +73,9 @@ exec /bin/mv "$@"
             plistlib.dump({"CFBundleIdentifier": "com.toccata.studio", "CFBundleShortVersionString": version}, stream)
         (path / "marker").write_text(marker)
 
-    def start(self):
+    def start(self, *extra):
         self.process = subprocess.Popen(["/bin/sh", str(self.script), str(self.parent.pid), str(self.target),
-                                         str(self.staged), str(self.backup), str(self.work), self.identity, "0.2.0"],
+                                         str(self.staged), str(self.backup), str(self.work), self.identity, "0.2.0", *extra],
                                         env=self.environment, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
     def ready(self):
@@ -133,6 +136,7 @@ exec /bin/mv "$@"
         self.assertNotEqual(self.finish(), 0)
         self.assertEqual((self.target / "marker").read_text(), "external update")
         self.assertFalse(self.backup.exists())
+        self.assertFalse((self.root / "launched.txt").exists())
 
     def test_wrong_version_is_not_offered_for_installation(self):
         with (self.staged / "Contents/Info.plist").open("wb") as stream:
@@ -141,6 +145,51 @@ exec /bin/mv "$@"
         self.assertNotEqual(self.process.wait(timeout=5), 0)
         self.assertFalse((self.work / "ready").exists())
         self.assertFalse(self.backup.exists())
+
+    def personal(self, replacement_channel="personal-stable"):
+        target = self.root / "Toccata Personal.app"
+        self.target.rename(target)
+        self.target = target
+        for app, channel in [(self.target, "personal-stable"), (self.staged, replacement_channel)]:
+            path = app / "Contents/Info.plist"
+            info = plistlib.loads(path.read_bytes())
+            info.update(CFBundleIdentifier="cn.ericgao.toccata.personal", CFBundleExecutable="ToccataPersonal",
+                        ToccataDistributionChannel=channel, ToccataUpdateMode="in-app")
+            path.write_bytes(plistlib.dumps(info))
+        (self.staged / "signed-hash").write_text("a" * 40)
+
+    def test_personal_update_replaces_only_the_personal_bundle_and_relaunches(self):
+        self.personal()
+        self.start("personal", "a" * 40)
+        self.ready()
+        self.assertEqual(self.finish(), 0)
+        self.assertEqual((self.target / "marker").read_text(), "replacement")
+        self.assertEqual((self.backup / "marker").read_text(), "original")
+        self.assertIn(str(self.target), (self.root / "launched.txt").read_text())
+
+    def test_personal_update_rejects_a_candidate_even_with_matching_identity(self):
+        self.personal(replacement_channel="personal-candidate")
+        self.start("personal", "a" * 40)
+        self.assertNotEqual(self.process.wait(timeout=5), 0)
+        self.assertFalse((self.work / "ready").exists())
+
+    def test_personal_update_rechecks_staged_signature_after_app_exits(self):
+        self.personal()
+        self.start("personal", "a" * 40)
+        self.ready()
+        (self.staged / "signed-hash").write_text("b" * 40)
+        self.assertNotEqual(self.finish(), 0)
+        self.assertEqual((self.target / "marker").read_text(), "original")
+        self.assertFalse(self.backup.exists())
+
+    def test_personal_update_aborts_if_backup_path_appears_before_replacement(self):
+        self.personal()
+        self.start("personal", "a" * 40)
+        self.ready()
+        self.backup.mkdir()
+        self.assertNotEqual(self.finish(), 0)
+        self.assertEqual((self.target / "marker").read_text(), "original")
+        self.assertEqual(list(self.backup.iterdir()), [])
 
 
 if __name__ == "__main__":

@@ -40,8 +40,8 @@ final class AppUpdateController: ObservableObject {
     }
 
     func download(_ update: AvailableUpdate) {
-        guard !PersonalDistribution.isPersonal else {
-            state = .failed(L10n.tr("个人版采用手动更新"))
+        guard PersonalDistribution.supportsInAppUpdates else {
+            state = .failed(UpdateInstallFailure.candidate.message)
             return
         }
         guard !state.isBusy else { return }
@@ -82,8 +82,8 @@ final class AppUpdateController: ObservableObject {
     }
 
     func install() {
-        guard !PersonalDistribution.isPersonal else {
-            state = .failed(L10n.tr("个人版采用手动更新"))
+        guard PersonalDistribution.supportsInAppUpdates else {
+            state = .failed(UpdateInstallFailure.candidate.message)
             return
         }
         guard let prepared, !state.isBusy else { return }

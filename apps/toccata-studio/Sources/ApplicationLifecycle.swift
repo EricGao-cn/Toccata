@@ -154,7 +154,12 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
             let stopped = await coreProcess.stop()
             if stopped {
                 do {
-                    try await updateInstallation?.start()
+                    if let updateInstallation {
+                        if PersonalDistribution.isPersonal && !coreProcess.isStoppedForPersonalUpdate() {
+                            throw UpdateInstallFailure.collector
+                        }
+                        try await updateInstallation.start()
+                    }
                     updateInstallation = nil
                 } catch {
                     isQuitting = false
@@ -182,7 +187,7 @@ final class ToccataApplicationDelegate: NSObject, NSApplicationDelegate, NSWindo
     }
 
     func installUpdate(start: @escaping () async throws -> Void, failed: @escaping (Error) -> Void) {
-        guard !PersonalDistribution.isPersonal else { failed(UpdateInstallFailure.personalManualUpdates); return }
+        guard PersonalDistribution.supportsInAppUpdates else { failed(UpdateInstallFailure.candidate); return }
         guard !isQuitting, updateInstallation == nil else { failed(UpdateInstallFailure.save); return }
         updateInstallation = (start, failed)
         NSApp.terminate(nil)

@@ -132,6 +132,19 @@ final class CoreProcessController: ObservableObject {
         return true
     }
 
+    func isStoppedForPersonalUpdate() -> Bool {
+        guard process?.isRunning != true, !socketIsReachable(socketPath),
+              (try? PersonalDistribution.validateDirectory(dataDirectory)) != nil else { return false }
+        // An attached collector may outlive Studio without being its child.
+        let lockPath = dataDirectory.appendingPathComponent("toccata.lock").path
+        let descriptor = open(lockPath, O_RDONLY | O_NOFOLLOW | O_NONBLOCK)
+        guard descriptor >= 0 else { return errno == ENOENT }
+        defer { close(descriptor) }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, info.st_mode & S_IFMT == S_IFREG, info.st_nlink == 1 else { return false }
+        return flock(descriptor, LOCK_EX | LOCK_NB) == 0
+    }
+
     private static func probeSocket(_ path: String) -> Bool {
         let fd = socket(AF_UNIX, SOCK_STREAM, 0)
         guard fd >= 0 else { return false }

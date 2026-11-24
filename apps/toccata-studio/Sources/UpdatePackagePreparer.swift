@@ -4,11 +4,12 @@ import Foundation
 import Security
 
 enum UpdateInstallFailure: Error {
-    case location, integrity, package, incompatible, installer, save, personalManualUpdates
+    case location, integrity, package, incompatible, installer, save, candidate, collector
 
     var message: String {
         switch self {
-        case .personalManualUpdates: return L10n.tr("个人版采用手动更新")
+        case .candidate: return L10n.tr("隔离候选版仅可查看发布页面。")
+        case .collector: return L10n.tr("个人版采集服务仍在运行，更新已暂停。请退出其他个人版实例后重试。")
         case .location: return L10n.tr("请先将 Toccata 移到可写的应用程序文件夹，再使用应用内更新。")
         case .integrity: return L10n.tr("安装包校验未通过，原应用未改动。请重新下载。")
         case .package: return L10n.tr("安装包无效或不属于 Toccata，原应用未改动。")
@@ -26,9 +27,10 @@ struct PreparedAppUpdate: Codable, Equatable {
     let directory: URL
     let originalIdentity: String
     let version: String
+    var personalCDHash: String? = nil
 
     static func cleanUpSuccessfulInstallation(arguments: [String] = CommandLine.arguments, target: URL = Bundle.main.bundleURL) {
-        guard !PersonalDistribution.isPersonal else { return }
+        guard PersonalDistribution.supportsInAppUpdates else { return }
         guard let index = arguments.firstIndex(of: "--toccata-updated"), arguments.indices.contains(index + 1) else { return }
         let directory = URL(fileURLWithPath: arguments[index + 1]).standardizedFileURL
         let temporary = FileManager.default.temporaryDirectory.resolvingSymlinksInPath()
@@ -46,6 +48,13 @@ struct PreparedAppUpdate: Codable, Equatable {
               let info = try? UpdatePackagePreparer.appInfo(target),
               info["CFBundleShortVersionString"] as? String == plan.version,
               (try? UpdatePackagePreparer.appInfo(plan.backup)) != nil else { return }
+        if PersonalDistribution.isPersonal {
+            guard target.lastPathComponent == ReleaseChannel.personal.appName,
+                  let attributes = try? FileManager.default.attributesOfItem(atPath: plan.backup.path),
+                  let volume = attributes[.systemNumber] as? NSNumber,
+                  let inode = attributes[.systemFileNumber] as? NSNumber,
+                  "\(volume):\(inode)" == plan.originalIdentity else { return }
+        }
         // Reached only after the replacement app has actually started.
         try? FileManager.default.removeItem(at: plan.backup)
         try? FileManager.default.removeItem(at: directory)
@@ -57,7 +66,8 @@ struct PreparedAppUpdate: Codable, Equatable {
     }
 
     func startInstaller() async throws {
-        guard !PersonalDistribution.isPersonal else { throw UpdateInstallFailure.personalManualUpdates }
+        guard PersonalDistribution.supportsInAppUpdates else { throw UpdateInstallFailure.candidate }
+        guard !PersonalDistribution.isPersonal || personalCDHash != nil else { throw UpdateInstallFailure.package }
         let worker = Task.detached(priority: .userInitiated) {
             let script = directory.appendingPathComponent("install-update.sh")
             let ready = directory.appendingPathComponent("ready")
@@ -68,8 +78,10 @@ struct PreparedAppUpdate: Codable, Equatable {
             defer { try? handle.close() }
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/bin/sh")
-            process.arguments = [script.path, String(ProcessInfo.processInfo.processIdentifier),
+            var arguments = [script.path, String(ProcessInfo.processInfo.processIdentifier),
                                  target.path, staged.path, backup.path, directory.path, originalIdentity, version]
+            if let personalCDHash { arguments += ["personal", personalCDHash] }
+            process.arguments = arguments
             process.standardOutput = handle
             process.standardError = handle
             try process.run()
@@ -90,13 +102,24 @@ struct UpdatePackagePreparer {
     init(target: URL = Bundle.main.bundleURL) { self.target = target }
 
     func prepare(_ update: AvailableUpdate, progress: @escaping @Sendable (Double?) -> Void) async throws -> PreparedAppUpdate {
-        guard !PersonalDistribution.isPersonal else { throw UpdateInstallFailure.personalManualUpdates }
+        guard PersonalDistribution.supportsInAppUpdates else { throw UpdateInstallFailure.candidate }
         guard let package = update.package else { throw UpdateInstallFailure.package }
+        if PersonalDistribution.isPersonal {
+            try Self.checkPersonalPackage(package, version: update.version)
+        }
         try Self.checkLocation(target)
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("ToccataUpdate-\(UUID())", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false, attributes: [.posixPermissions: 0o700])
         var complete = false
-        defer { if !complete { try? FileManager.default.removeItem(at: directory) } }
+        defer {
+            if !complete {
+                // Never recursively remove a workspace that may still contain a mounted image.
+                let volume = directory.appendingPathComponent("volume")
+                if !FileManager.default.fileExists(atPath: volume.path) || rmdir(volume.path) == 0 {
+                    try? FileManager.default.removeItem(at: directory)
+                }
+            }
+        }
         let configuration = URLSessionConfiguration.ephemeral
         configuration.timeoutIntervalForRequest = 30
         configuration.timeoutIntervalForResource = 600
@@ -124,13 +147,27 @@ struct UpdatePackagePreparer {
         return prepared
     }
 
-    static func checkLocation(_ target: URL) throws {
+    static func checkLocation(_ target: URL, channel: ReleaseChannel = ToccataReleaseSource.channel) throws {
         let values = try? target.resourceValues(forKeys: [.isDirectoryKey, .isSymbolicLinkKey, .volumeIsReadOnlyKey])
         guard target.pathExtension == "app", values?.isDirectory == true,
               values?.isSymbolicLink != true, values?.volumeIsReadOnly != true,
               !target.path.contains("/AppTranslocation/"),
               FileManager.default.isWritableFile(atPath: target.path),
               FileManager.default.isWritableFile(atPath: target.deletingLastPathComponent().path) else { throw UpdateInstallFailure.location }
+        if channel == .personal {
+            guard target.lastPathComponent == channel.appName else { throw UpdateInstallFailure.location }
+            _ = try appInfo(target, channel: channel)
+        }
+    }
+
+    static func checkPersonalPackage(_ package: UpdatePackage, version: String) throws {
+        let channel = ReleaseChannel.personal
+        let urls = [UpdatePackage.architecture, "universal"].map { architecture in
+            channel.packageURL(tag: "personal-v\(version)", name: channel.packageName(version: version, architecture: architecture))
+        }
+        guard let parsed = ReleaseVersion(version), version == "\(parsed.major).\(parsed.minor).\(parsed.patch)",
+              urls.contains(package.url), (1...1_073_741_824).contains(package.size),
+              isLowercaseHex(package.sha256, count: 64) else { throw UpdateInstallFailure.package }
     }
 
     static func verifyArchive(_ archive: URL, package: UpdatePackage) throws {
@@ -147,10 +184,10 @@ struct UpdatePackagePreparer {
         guard hash == package.sha256 else { throw UpdateInstallFailure.integrity }
     }
 
-    private static func stage(archive: URL, package: UpdatePackage, update: AvailableUpdate,
-                              target: URL, directory: URL) throws -> PreparedAppUpdate {
+    static func stage(archive: URL, package: UpdatePackage, update: AvailableUpdate,
+                      target: URL, directory: URL, channel: ReleaseChannel = ToccataReleaseSource.channel) throws -> PreparedAppUpdate {
         try verifyArchive(archive, package: package)
-        let currentInfo = try appInfo(target)
+        let currentInfo = try appInfo(target, channel: channel)
         guard let currentVersion = currentInfo["CFBundleShortVersionString"] as? String,
               let installed = ReleaseVersion(currentVersion), let latest = ReleaseVersion(update.version),
               latest > installed else { throw UpdateInstallFailure.package }
@@ -160,13 +197,26 @@ struct UpdatePackagePreparer {
         let mount = directory.appendingPathComponent("volume", isDirectory: true)
         try FileManager.default.createDirectory(at: mount, withIntermediateDirectories: false)
         _ = try run("/usr/bin/hdiutil", ["attach", "-readonly", "-nobrowse", "-noautoopen", "-mountpoint", mount.path, archive.path], directory: directory)
+        var detached = false
         defer {
-            do { _ = try run("/usr/bin/hdiutil", ["detach", mount.path], directory: directory) }
-            catch { _ = try? run("/usr/bin/hdiutil", ["detach", "-force", mount.path], directory: directory) }
+            if !detached {
+                do { _ = try run("/usr/bin/hdiutil", ["detach", mount.path], directory: directory) }
+                catch {
+                    if channel == .upstream { _ = try? run("/usr/bin/hdiutil", ["detach", "-force", mount.path], directory: directory) }
+                }
+            }
         }
         try Task.checkCancellation()
-        let candidate = mount.appendingPathComponent("Toccata.app")
-        try validate(candidate, version: update.version, requiredTeam: team, directory: directory)
+        let candidate = mount.appendingPathComponent(channel.appName)
+        try validate(candidate, version: update.version, requiredTeam: team, directory: directory, channel: channel)
+        var personalCDHash: String?
+        if channel == .personal {
+            guard try mount.resourceValues(forKeys: [.volumeIsReadOnlyKey]).volumeIsReadOnly == true else {
+                throw UpdateInstallFailure.package
+            }
+            try validatePersonalManifest(at: mount, version: update.version, package: package)
+            personalCDHash = try signingCDHash(candidate, directory: directory)
+        }
         let parent = target.deletingLastPathComponent()
         let token = UUID().uuidString
         let staged = parent.appendingPathComponent(".Toccata-update-\(token).app")
@@ -174,28 +224,38 @@ struct UpdatePackagePreparer {
         var complete = false
         defer { if !complete { try? FileManager.default.removeItem(at: staged) } }
         _ = try run("/usr/bin/ditto", [candidate.path, staged.path], directory: directory)
-        try validate(staged, version: update.version, requiredTeam: team, directory: directory)
+        try validate(staged, version: update.version, requiredTeam: team, directory: directory, channel: channel)
+        if let personalCDHash {
+            guard try signingCDHash(staged, directory: directory) == personalCDHash else { throw UpdateInstallFailure.integrity }
+            _ = try run("/usr/bin/hdiutil", ["detach", mount.path], directory: directory)
+            detached = true
+        }
         try Task.checkCancellation()
         guard let script = AppResources.bundle.url(forResource: "install-update", withExtension: "sh") else { throw UpdateInstallFailure.installer }
         try FileManager.default.copyItem(at: script, to: directory.appendingPathComponent("install-update.sh"))
         let plan = PreparedAppUpdate(target: target, staged: staged, backup: backup, directory: directory,
-                                     originalIdentity: originalIdentity, version: update.version)
+                                     originalIdentity: originalIdentity, version: update.version, personalCDHash: personalCDHash)
         try JSONEncoder().encode(plan).write(to: directory.appendingPathComponent("plan.json"), options: .atomic)
         complete = true
         return plan
     }
 
-    static func appInfo(_ app: URL) throws -> [String: Any] {
+    static func appInfo(_ app: URL, channel: ReleaseChannel = ToccataReleaseSource.channel) throws -> [String: Any] {
         guard let values = try? app.resourceValues(forKeys: [.isSymbolicLinkKey]), values.isSymbolicLink != true,
               let data = try? Data(contentsOf: app.appendingPathComponent("Contents/Info.plist")),
               let info = try? PropertyListSerialization.propertyList(from: data, format: nil) as? [String: Any],
-              info["CFBundleIdentifier"] as? String == "com.toccata.studio",
-              info["CFBundleExecutable"] as? String == "Toccata" else { throw UpdateInstallFailure.package }
+              info["CFBundleIdentifier"] as? String == channel.bundleIdentifier,
+              info["CFBundleExecutable"] as? String == channel.executableName else { throw UpdateInstallFailure.package }
+        if channel == .personal {
+            guard info["ToccataDistributionChannel"] as? String == "personal-stable",
+                  info["ToccataUpdateMode"] as? String == "in-app" else { throw UpdateInstallFailure.package }
+        }
         return info
     }
 
-    static func validate(_ app: URL, version: String, requiredTeam: String?, directory: URL) throws {
-        let info = try appInfo(app)
+    static func validate(_ app: URL, version: String, requiredTeam: String?, directory: URL,
+                         channel: ReleaseChannel = ToccataReleaseSource.channel) throws {
+        let info = try appInfo(app, channel: channel)
         guard info["CFBundleShortVersionString"] as? String == version else { throw UpdateInstallFailure.package }
         guard let minimum = info["LSMinimumSystemVersion"] as? String else { throw UpdateInstallFailure.incompatible }
         let components = minimum.split(separator: ".", omittingEmptySubsequences: false)
@@ -214,11 +274,60 @@ struct UpdatePackagePreparer {
         }
         let team = try signingTeam(app)
         if let requiredTeam, requiredTeam != team { throw UpdateInstallFailure.integrity }
-        for name in ["Toccata", "toccata-core"] {
+        for name in [channel.executableName, "toccata-core"] {
             let binary = app.appendingPathComponent("Contents/MacOS/\(name)")
             guard FileManager.default.isExecutableFile(atPath: binary.path) else { throw UpdateInstallFailure.package }
             _ = try run("/usr/bin/lipo", [binary.path, "-verify_arch", UpdatePackage.architecture], directory: directory)
         }
+    }
+
+    static func validatePersonalManifest(at volume: URL, version: String, package: UpdatePackage) throws {
+        let channel = ReleaseChannel.personal
+        let expected = Set([channel.appName, "release.json", "release.json.sha256", "安装说明.txt"])
+        guard Set(try FileManager.default.contentsOfDirectory(atPath: volume.path)) == expected else {
+            throw UpdateInstallFailure.package
+        }
+        let data = try readMetadata(volume.appendingPathComponent("release.json"), limit: 4_194_304)
+        let checksum = try readMetadata(volume.appendingPathComponent("release.json.sha256"), limit: 1024)
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        guard String(data: checksum, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines) == digest else {
+            throw UpdateInstallFailure.integrity
+        }
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        let manifest = try decoder.decode(PersonalUpdateManifest.self, from: data)
+        let info = try appInfo(volume.appendingPathComponent(channel.appName), channel: channel)
+        guard manifest.schemaVersion == 1, manifest.channel == "personal-stable", !manifest.dirty,
+              manifest.tag == "personal-v\(version)", manifest.version == version,
+              manifest.app == channel.appName, manifest.bundleId == channel.bundleIdentifier,
+              isLowercaseHex(manifest.commit, count: 40), isLowercaseHex(manifest.tagObject, count: 40),
+              [UpdatePackage.architecture, "universal"].contains(manifest.architecture),
+              package.url.lastPathComponent == channel.packageName(version: version, architecture: manifest.architecture),
+              info["CFBundleShortVersionString"] as? String == version,
+              info["CFBundleVersion"] as? String == manifest.build,
+              info["ToccataSourceCommit"] as? String == manifest.commit,
+              info["DTSDKName"] as? String == "macosx\(manifest.sdk)" else { throw UpdateInstallFailure.package }
+    }
+
+    private static func readMetadata(_ url: URL, limit: Int) throws -> Data {
+        let values = try url.resourceValues(forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey])
+        guard values.isRegularFile == true, values.isSymbolicLink == false,
+              let size = values.fileSize, (1...limit).contains(size) else { throw UpdateInstallFailure.package }
+        return try Data(contentsOf: url)
+    }
+
+    private static func isLowercaseHex(_ value: String, count: Int) -> Bool {
+        value.utf8.count == count && value.utf8.allSatisfy { (48...57).contains($0) || (97...102).contains($0) }
+    }
+
+    private static func signingCDHash(_ app: URL, directory: URL) throws -> String {
+        let output = try run("/usr/bin/codesign", ["-d", "--verbose=4", app.path], directory: directory)
+        guard let line = output.split(separator: "\n").first(where: { $0.hasPrefix("CDHash=") }) else {
+            throw UpdateInstallFailure.integrity
+        }
+        let hash = String(line.dropFirst("CDHash=".count))
+        guard isLowercaseHex(hash, count: 40) else { throw UpdateInstallFailure.integrity }
+        return hash
     }
 
     private static func signingTeam(_ app: URL) throws -> String? {
@@ -259,6 +368,12 @@ struct UpdatePackagePreparer {
         }
         return (try? String(contentsOf: output)) ?? ""
     }
+}
+
+private struct PersonalUpdateManifest: Decodable {
+    let schemaVersion: Int
+    let channel, version, build, sdk, commit, tag, tagObject, app, bundleId, architecture: String
+    let dirty: Bool
 }
 
 final class UpdateDownloadDelegate: NSObject, URLSessionDownloadDelegate {

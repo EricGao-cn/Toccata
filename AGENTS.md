@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Scope & Branches
-This personal fork may contain public customizations. Keep `main` as an upstream mirror; integrate accepted work into `codex/personal`. Use `codex/feat/<name>` or `codex/sync/<upstream-tag>` branches with separate worktrees for substantial features or upstream upgrades. Upstream PRs/issues are optional, only when requested. Personal distribution uses manual updates and the separate entry points described in `docs/personal-release.md`; personal in-app installation updates remain disabled.
+This personal fork may contain public customizations. Keep `main` as an upstream mirror; integrate accepted work into `codex/personal`. Use `codex/feat/<name>` or `codex/sync/<upstream-tag>` branches with separate worktrees for substantial features or upstream upgrades. Upstream PRs/issues are optional, only when requested. Use the personal distribution entry points in `docs/personal-release.md`. Only personal stable builds can install compatible personal updates in-app, after the user chooses Install and Restart.
 
 ## Feature Chat Workflow
 For new feature implementation, read this file and `docs/personal-development.md`; inspect directory, branch, and existing changes. Start from committed `codex/personal` in a dedicated worktree. Reuse an already-correct feature worktree; do not create another unnecessarily. If detached, create `codex/feat/<name>` there. Run `dev init` and `dev check` using the entry below; verify isolated identity, data, and outputs before implementation.

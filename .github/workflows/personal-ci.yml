@@ -76,7 +76,7 @@ jobs:
         run: |
           # Interactive WebKit tests need a local desktop.
           ./scripts/personal/dev test-swift --skip MarkdownWebEditorTests
-      - name: Test personal distribution and manual-update guards
+      - name: Test personal distribution and updates
         timeout-minutes: 15
         run: |
           # Do not run upstream automatic-installation tests with personal guards enabled.

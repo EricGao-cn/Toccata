@@ -4,14 +4,14 @@
 
 个人版发布、日常开发 CI 和手动更新均已验收使用。本页描述当前流程；早期“只准备、不安装”等限制与当时的测试结果见 [历史验收记录](personal-history.md)。文档描述能力，不构成一次新的执行授权。
 
-个人版本通过个人 GitHub Release 分发，本机手动安装。当前个人稳定版为 `1.2.0 / build 4`，基于上游 `v0.1.5 / 40d0641`，见 [1.2.0 版本说明](releases/personal-v1.2.0.md)。待发布的 `1.2.1 / build 5` 沿用同一上游基线，修复每日记录编辑，见 [1.2.1 版本说明](releases/personal-v1.2.1.md)。Actions 构建 DMG 并停在 Release 草稿，正式发布和日用 App 更新仍是独立步骤，分别按当次授权执行。配置位于 `scripts/personal/release.json`，保留既有个人标签、安装包及上游版本配置。
+个人版本通过个人 GitHub Release 分发。`1.2.2 / build 6` 基于上游 `v0.1.5 / 40d0641`，首次加入个人版应用内更新，见 [1.2.2 版本说明](releases/personal-v1.2.2.md)。Actions 构建 DMG 并停在 Release 草稿，正式发布和日用 App 更新按当次授权分别执行。配置位于 `scripts/personal/release.json`，保留既有个人标签、安装包及上游版本配置。
 
 | 类型 | Bundle ID | 数据目录 | 采集与更新 |
 | --- | --- | --- | --- |
 | 上游日用版 | `com.toccata.studio` | `~/Library/Application Support/Toccata/` | 沿用上游 |
 | 隔离开发版 | `cn.ericgao.toccata.dev.<worktree-id>` | 各工作树的独立测试目录 | task-only，沿用开发入口 |
 | 个人候选包 | 开发身份再加 `.candidate` | 当前工作树测试目录下的 `personal-candidate/` | 不启动采集、不请求输入监控；可手动检查个人发布，不能应用内安装 |
-| 个人稳定版 | `cn.ericgao.toccata.personal` | `~/Library/Application Support/Toccata-Personal/` | 独立个人采集服务；检查个人 GitHub 发布，手动下载安装 |
+| 个人稳定版 | `cn.ericgao.toccata.personal` | `~/Library/Application Support/Toccata-Personal/` | 独立个人采集服务，支持用户确认后安装个人 GitHub 更新 |
 
 默认安装位置为 `~/Applications/Toccata Personal.app`。上游 `/Applications/Toccata.app` 保留原样。个人编译入口固定 SDK 26.2，不放宽上游 SDK 26.5 guard；正式包记录实际 SDK、架构、提交、个人 Tag 和上游基线。
 
@@ -21,7 +21,7 @@
 
 | 场景 | App 与数据如何处理 | 使用入口 |
 | --- | --- | --- |
-| 普通 App 更新 | 替换个人 `.app`，继续使用现有个人数据目录 | 下方手动更新流程；无需先做迁移副本 |
+| 普通 App 更新 | 替换个人 `.app`，继续使用现有个人数据目录 | 下方应用内更新或手动更新流程，无需先做迁移副本 |
 | 一致性备份 | 读取指定 App 和数据，保存新快照，不替换源目录 | [备份](personal-maintenance.md#备份) |
 | 数据迁移 | 从已校验备份制作副本、转换路径，先验收副本 | [数据迁移副本](personal-maintenance.md#数据迁移副本) |
 | 成对安装 | 先备份个人目标，再同时替换 App 与已准备数据 | [成对安装](personal-maintenance.md#成对安装) |
@@ -36,7 +36,9 @@
 
 ## 普通 App 更新
 
-适用于已经安装个人版、继续使用同一身份与数据目录的情况：
+适用于已经安装个人版、继续使用同一身份与数据目录的情况。已安装支持应用内更新的稳定版时，从“关于 Toccata → 个人版更新”检查，点击“下载更新”，校验完成后点击“安装并重启”。新版须有带 SHA-256 的兼容个人 DMG。安装前会保存任务及每日记录，停止本次启动的采集服务，并确认同一数据目录的采集锁已释放。更新只替换 App。替换或重启命令失败时会尝试恢复旧 App。数据快照仍可按[备份流程](personal-maintenance.md#备份)另行生成。
+
+`1.2.1` 及之前的个人版须手动替换一次，之后即可使用支持此功能的正式版接收后续更新。没有兼容包或应用内安装失败时，也可继续按以下手动步骤更新。
 
 1. 在当前个人版“关于 Toccata → 个人版更新”点击“检查更新”，通过“打开下载页”进入正式 Release。
 2. 下载 DMG 和 SHA-256，核对版本、架构、校验值与发布说明。GitHub 的 Source code 压缩包只含源码。
@@ -49,7 +51,7 @@
 
 若替换或启动失败，保留数据目录，保持有关程序退出，核对安装位置、包完整性及版本兼容性后处理；不要通过清数据或删除日志来修复。若存在维护事务的 pending 标记，先按 [中断恢复](personal-maintenance.md#中断恢复)处理。
 
-固定更新源为 `EricGao-cn/Toccata`。个人版在“关于 Toccata → 个人版更新”中手动检查 `personal-vX.Y.Z` 正式发布，并提供“打开下载页”。仅打开关于窗口不联网；不会下载、解压或安装更新，也不会上传任务、日记和键盘记录。不使用仓库的通用 latest 标记，按数值比较个人标签，排除上游标签、草稿、预览版和非法版本。列表分页最多 10 页；读取不完整时显示失败，不误报已是最新。
+固定更新源为 `EricGao-cn/Toccata`。应用启动和用户主动检查时按数值比较 `personal-vX.Y.Z` 标签，排除上游标签、草稿、预览版和非法版本。列表最多读 10 页，读取不完整时显示失败。下载和安装分别由按钮触发，版本查询和下载请求不包含任务、日记和键盘记录。发布页始终可打开。
 
 当前客户端匿名检查公开发布。私有仓库、尚无个人正式发布、限流或网络失败均显示可重试的状态；可用发布页面入口在浏览器登录查看，不向 App 写入 GitHub token。普通上游构建继续使用原上游更新流程。
 
@@ -80,11 +82,11 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/candidate-direct
 1. 更新 `scripts/personal/release.json` 的个人版本/build 和对应发布说明；待发布改动完成测试、审查和隔离验收，按授权提交并合入 `codex/personal`。
 2. 选定最终个人版本，在该已接受的干净提交创建固定的 **annotated** `personal-v<version>` Tag；不移动或复用个人 Tag，不覆盖任何上游 Tag。
 3. 记录提交 SHA、Tag 对象和固定上游基线；构建后记录实际 SDK、架构、安装包及清单的 SHA-256。
-4. 选择 Actions 构建或下方本地备用入口。示例使用 `personal-v1.2.1`，实际标签须匹配版本配置、已创建且尚未发布。保留所有既有标签。
+4. 选择 Actions 构建或下方本地备用入口。实际标签须匹配版本配置、已创建且尚未发布。保留所有既有标签。
 
 ```bash
-python3 -B scripts/personal/release.py build-release --tag personal-v1.2.1
-python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.2.1
+python3 -B scripts/personal/release.py build-release --tag personal-v1.2.2
+python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.2.2
 ```
 
 源码不干净、Tag 与 HEAD 不一致、不是 annotated Tag、提交未纳入个人主线、上游 Tag 与固定 SHA 不一致时，正式构建拒绝执行。不会自动提交、打 Tag、推送、发布、安装或启动。正式输出目录已存在时拒绝覆盖。
@@ -98,8 +100,8 @@ python3 -B scripts/personal/release.py verify /absolute/path/to/personal-v1.2.1
 
 ```bash
 python3 -B scripts/personal/publish.py prepare \
-  --package /absolute/path/to/personal-v1.2.1 \
-  --notes docs/releases/personal-v1.2.1.md \
+  --package /absolute/path/to/personal-v1.2.2 \
+  --notes docs/releases/personal-v1.2.2.md \
   --format dmg \
   --output /absolute/path/to/new-github-release-bundle
 python3 -B scripts/personal/publish.py plan \
@@ -129,7 +131,7 @@ python3 -B scripts/personal/publish.py create-draft \
 
 5. 在 GitHub 草稿中核对版本、说明、DMG（或兼容 ZIP）和校验值，按发布授权确认正式发布，或明确授权 Agent 完成。App 随后才能检测到它。历史版本和标签保留。
 
-从发布页下载个人安装包 DMG，或历史版本保留的安装包 ZIP；GitHub 自动提供的 Source code 压缩包不是可运行安装包。DMG 挂载后、ZIP 解压后含 `Toccata Personal.app` 和配套清单；其中的正式包目录也可作为 [成对安装](personal-maintenance.md#成对安装)的 `--package` 来源，但只有需要同时替换数据时才用该入口。GitHub 分发不替代已有数据备份。应用内一键安装保持禁用；ad-hoc 签名的 App 不会因为增加 DMG 获得 Developer ID 公证。
+从发布页下载个人安装包 DMG，或历史版本保留的安装包 ZIP；GitHub 自动提供的 Source code 压缩包不是可运行安装包。DMG 挂载后、ZIP 解压后含 `Toccata Personal.app` 和配套清单；其中的正式包目录也可作为 [成对安装](personal-maintenance.md#成对安装)的 `--package` 来源，但只有需要同时替换数据时才用该入口。GitHub 分发不替代已有数据备份。ad-hoc 签名的 App 不会因为增加 DMG 获得 Developer ID 公证。
 
 ## 个人 GitHub Actions：构建 DMG 并停在草稿
 
@@ -146,7 +148,7 @@ python3 -B scripts/personal/publish.py create-draft \
 
 两个 job 的职责与权限：
 
-1. **build（contents: read）**：先检出已接受的 `codex/personal`，用其中的校验脚本解析 annotated 标签并确认提交属于个人主线，之后才检出解析所得的精确 SHA；不先运行待校验标签里的脚本。再次核对标签对象未变、版本、上游基线、非空更新说明与远端同名发布，再初始化隔离环境，分别运行脚本回归、个人 core、上游完整 Swift 逻辑测试及个人模式专门测试。上游模式仅跳过交互式 `MarkdownWebEditorTests`；个人模式单独运行 `PersonalDistributionTests|PersonalReleaseUpdateTests`，其中包含禁止下载、准备和安装的保护验证。上游自动安装的正向测试只在上游模式运行，避免在个人版明确拒绝回调后无限等待。各测试阶段有独立超时和日志步骤。只读 token 的草稿可见性有限，最终防重检查仍在持写权限的 draft job 中执行。构建完整 ad-hoc 签名 App，生成并只读挂载校验 DMG；将 DMG、两个清单及校验文件、更新说明、发布素材元数据作为 Actions artifact 保留 14 天。另将提交、标签对象和 DMG SHA-256 作为独立 job 输出。
+1. **build（contents: read）**：先检出已接受的 `codex/personal`，用其中的校验脚本解析 annotated 标签并确认提交属于个人主线，之后才检出解析所得的精确 SHA；不先运行待校验标签里的脚本。再次核对标签对象未变、版本、上游基线、非空更新说明与远端同名发布，再初始化隔离环境，分别运行脚本回归、个人 core、上游完整 Swift 逻辑测试及个人模式专门测试。上游模式仅跳过交互式 `MarkdownWebEditorTests`；个人模式单独运行 `PersonalDistributionTests|PersonalReleaseUpdateTests`，验证个人仓库选包、清单、采集锁和用户确认后安装的流程。各测试阶段有独立超时和日志步骤。只读 token 的草稿可见性有限，最终防重检查仍在持写权限的 draft job 中执行。构建完整 ad-hoc 签名 App，生成并只读挂载校验 DMG；将 DMG、两个清单及校验文件、更新说明、发布素材元数据作为 Actions artifact 保留 14 天。另将提交、标签对象和 DMG SHA-256 作为独立 job 输出。
 2. **draft（contents: write、actions: read）**：从精确构建提交检出代码，按 build 输出的固定 artifact ID，显式通过当前仓库和当前 workflow run 的 REST 接口下载素材。`actions: read` 只用于读取 artifact；ID 缺失或非法时失败，不退回下载全部 artifact。只重跑失败的草稿 job 时仍使用原成功 build 的 ID，不按新 attempt 猜测名称。再次核对固定标签、主线、App 签名、DMG 内容、清单、架构与独立 job 输出的 SHA-256，并将 artifact 更新说明与标签中的已提交原文比对。创建私有上传快照后，仅执行 `gh release create --draft --verify-tag`。上传后用认证的分页 Release 列表定位唯一草稿，再按数字 Release ID 回读状态、版本、说明和全部四个附件的 SHA-256，并再次检查远端标签对象和提交未变，通过后输出草稿链接；不使用仅针对已发布版本的按标签查询接口。`GH_TOKEN` 只传给校验/上传脚本；官方 checkout/download action 使用各自 job 的 token，checkout 不保留认证信息。不使用长期 PAT，不执行 push、移动标签、删除或覆盖资产。
 
 上传前校验失败不会创建草稿；上传中断或上传后回读失败可能留下需要检查的草稿，错误会提示先查看发布页，工作流不会自动重试、删除或覆盖它。同标签并发最多执行一个运行，不取消正在构建/上传的运行；GitHub 可能用较新的等待运行替换旧的等待运行。后来的运行若发现已有草稿/发布就失败并保留现场。先核对 Actions 日志、artifact 和 GitHub 草稿，再决定后续操作；不要自动清除失败草稿或重用已发布标签。

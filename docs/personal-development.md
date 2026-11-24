@@ -1,6 +1,6 @@
 # Toccata 个人开发说明
 
-个人 Fork 采用功能 worktree、个人主线、日常开发 CI 和固定标签发布的流程。定制代码允许公开，个人 App 通过 GitHub Release 分发并手动更新，不默认向上游提 Issue 或 PR。
+个人 Fork 采用功能 worktree、个人主线、日常开发 CI 和固定标签发布的流程。定制代码允许公开。个人 App 通过 GitHub Release 分发，支持应用内更新的稳定版可由用户确认下载安装。不默认向上游提 Issue 或 PR。
 
 本文是当前开发操作手册，发布与日用更新见 [个人稳定版流程](personal-release.md)，早期准备阶段和验收结果见 [历史记录](personal-history.md)。初始化、构建和测试均不意味着授权提交、推送、发布、安装或迁移日用数据。
 
@@ -45,7 +45,7 @@ worktree 共享 Git 对象和分支信息，不共享未提交文件、忽略配
 
 日常 CI 仅在 `EricGao-cn/Toccata` 运行，以推送事件的精确 SHA 检出代码，使用只读 `contents` 权限且不保留 checkout 凭据，不传入 PAT、GitHub secrets 或发布 token。按分支 ref 分组，新 push 会取消同组较早的日常 CI；日常 CI 与发布工作流使用不同的并发组。事件与权限遵循 [GitHub 工作流语法](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax)，分组行为见 [并发规则](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency)。
 
-检查包括推送范围的空白错误、规范资源同步、Python 脚本回归、个人 core 测试、上游完整 Swift 逻辑测试和个人模式专门测试。新分支没有有效的 before SHA，或 rebase 后旧提交不在检出历史中时，空白检查改用当前提交与个人主线的共同祖先。Swift 沿用已验证的双模式：上游模式只跳过交互式 WebKit 测试；个人模式使用 `TOCCATA_PERSONAL` 编译并只运行 `PersonalDistributionTests|PersonalReleaseUpdateTests`，覆盖数据路径保护以及禁止下载、准备和自动安装的策略，避免把两种分发模式的安装预期混在一起。各测试阶段有独立超时，最后检查测试未改变受版本管理的源码或资源。
+检查包括推送范围的空白错误、规范资源同步、Python 脚本回归、个人 core 测试、上游完整 Swift 逻辑测试和个人模式专门测试。新分支没有有效的 before SHA，或 rebase 后旧提交不在检出历史中时，空白检查改用当前提交与个人主线的共同祖先。上游模式只跳过交互式 WebKit 测试。个人模式使用 `TOCCATA_PERSONAL` 编译并运行 `PersonalDistributionTests|PersonalReleaseUpdateTests`，覆盖数据路径、个人更新选包、清单和采集锁。各测试阶段有独立超时，最后检查测试未改变受版本管理的源码或资源。
 
 runner 固定使用 Apple Silicon `macos-26` 和 Xcode 26.2，通过个人 `dev` 入口检查实际 SDK 与固定 Rust 版本，状态与工具链放在 runner 临时目录，构建输出留在忽略的 `.local-dev` 中。不读取本机配置、日用 App 或真实数据，不启动采集服务。回归测试可在临时 fixture 中构造合成归档；工作流不调用候选/正式打包或安装入口，不上传 artifact，不创建标签、Release 草稿或正式发布。既有 `personal-release.yml` 仍只负责固定个人标签的发布流程。
 
@@ -134,7 +134,7 @@ Codex 托管 worktree 可能随对话归档而被清理。归档快照不是 Git
 
 脚本拒绝官方/个人稳定数据目录及其父子路径、错误的数据库/socket 重定向和符号链接运行文件。现有数据配置有问题时会报错，不会静默修复或覆盖。配置和打包机制不等于数据库同步，开发库不能作为稳定版升级时的数据来源。
 
-普通任务开发版的上游更新页面仍来自现有应用源码；它不是个人更新渠道，不用于安装个人版本。个人候选包及稳定包通过独立编译入口手动检查 `EricGao-cn/Toccata` 的个人正式发布并打开下载页，仍禁用在线安装更新，采用手动校验包与离线安装流程。`scripts/personal/publish.py` 默认把已验证正式包整理为 DMG（可用 `--format zip` 保持 ZIP 兼容），不重新编译 App；本地草稿上传默认只输出计划。个人 Actions 入口在新标签推送或主线手动运行时构建 DMG 并创建草稿，没有正式发布模式；授权推送个人标签时需包含这项影响。操作流程见 [个人稳定版说明](personal-release.md#个人-github-actions构建-dmg-并停在草稿)。
+普通任务开发版沿用上游更新页面。个人候选包可检查和打开 `EricGao-cn/Toccata` 的发布页。个人稳定版可在应用内下载、校验并安装兼容的个人 DMG。`scripts/personal/publish.py` 默认把已验证正式包整理为 DMG（可用 `--format zip` 保持 ZIP 兼容），不重新编译 App；本地草稿上传默认只输出计划。个人 Actions 入口在新标签推送或主线手动运行时构建 DMG 并创建草稿，没有正式发布模式；授权推送个人标签时需包含这项影响。操作流程见 [个人稳定版说明](personal-release.md#个人-github-actions构建-dmg-并停在草稿)。
 
 ## SDK 和验证
 
@@ -155,7 +155,7 @@ git diff --check
 
 ## 个人发布与日用更新
 
-日常开发 CI、个人发布和日用 App 更新是独立操作：分支 push 只检查测试；新固定标签 push 触发构建和草稿上传；草稿经核验后确认发布；用户再手动下载安装。个人版可以检查更新、打开下载页，应用内自动下载安装保持禁用。
+日常开发 CI、个人发布和日用 App 更新是独立操作。分支 push 触发测试，新固定标签 push 触发构建和草稿上传。草稿经核验后由维护者确认发布。支持应用内更新的稳定版在用户点击“安装并重启”后执行替换。
 
 发布步骤见 [个人稳定版流程](personal-release.md#个人-github-actions构建-dmg-并停在草稿)：验收改动并按授权合入个人主线，更新 `scripts/personal/release.json` 与对应发布说明，再创建并推送新的固定 annotated 标签。候选包用于独立身份和测试数据中的验收；正式发布必须基于已接受的干净提交，不能通过重定向开发数据路径冒充稳定版。
 
@@ -163,9 +163,9 @@ git diff --check
 
 接管上游记录、转换数据路径或恢复旧状态时，使用 [数据维护流程](personal-maintenance.md)。`maintenance.py install` 始终备份并成对替换 App/数据，需要已准备的数据副本，不是免备份的 App 更新入口。迁移、备份、回滚和中断恢复各有不同作用，不能通过删除 live WAL/SHM 或 pending 标记绕过校验。源码合并、构建和发布均不自动授权这些操作。
 
-个人版本独立记录，已保留既有固定标签和安装包；当前个人稳定版为 `1.1.1 / build 3`，继续基于上游 `v0.1.4 / d5bd542`，发布说明见 [personal-v1.1.1](releases/personal-v1.1.1.md)。配置位于 `scripts/personal/release.json`；构建记录个人 Tag、SHA、SDK、架构和校验值，并验证已接受的干净提交。上游 `shared/app-version.json`、Rust 版本的一致性检查继续保留。新正式包须待验收、提交并合入个人主线，再获准创建新标签后生成；候选 ZIP 不能充当正式包安装，既有标签不移动或复用。
+个人版本独立记录，保留既有固定标签和安装包。配置位于 `scripts/personal/release.json`；构建记录个人 Tag、SHA、SDK、架构和校验值，并验证已接受的干净提交。上游 `shared/app-version.json`、Rust 版本的一致性检查继续保留。新正式包须待验收、提交并合入个人主线，再获准创建新标签后生成；候选 ZIP 不能充当正式包安装，既有标签不移动或复用。
 
-个人稳定版 `1.2.0 / build 4` 已发布，基于上游 `v0.1.5 / 40d0641`，见 [1.2.0 版本说明](releases/personal-v1.2.0.md)。待发布的 `1.2.1 / build 5` 沿用同一上游基线，修复每日记录编辑，见 [1.2.1 版本说明](releases/personal-v1.2.1.md)。构建流程生成 DMG 并停在 Release 草稿，正式发布和日用 App 更新分别执行。`1.2.0` 包含完成任务动画、完成后取消置顶，以及启动时检查更新的侧栏橙点。侧栏和关于页共享检查状态，个人编译模式只访问个人正式发布源，仍只打开下载页、手动安装。匿名版本检查不发送任务、每日记录或键盘数据。上游引导式 DMG 资源保留在上游打包入口，个人 DMG 继续使用独立的 `disk_image.py` 流程。
+已发布的个人稳定版 `1.2.1 / build 5` 基于上游 `v0.1.5 / 40d0641`，见 [1.2.1 版本说明](releases/personal-v1.2.1.md)。该版本需要手动升级一次才能进入支持应用内更新的后续版本。侧栏和关于页共享检查状态，个人版只访问个人正式发布源。上游引导式 DMG 资源保留在上游打包入口，个人 DMG 继续使用独立的 `disk_image.py` 流程。
 
 ## 吸收上游更新
 

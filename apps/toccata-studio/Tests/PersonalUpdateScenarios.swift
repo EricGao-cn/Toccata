@@ -1,3 +1,5 @@
+import CryptoKit
+import Darwin
 import Foundation
 #if canImport(toccata_studio)
 @testable import toccata_studio
@@ -111,7 +113,121 @@ enum PersonalUpdateScenarios {
         }
         let upstreamUpdate = try await upstream.check(current: current)
         try expect(upstreamUpdate?.pageURL.absoluteString == "https://github.com/KMnO4-zx/Toccata/releases/tag/v1.2.0", "upstream link changed")
-        if PersonalDistribution.isPersonal { try await installationGuards() }
+        try await packageSelection(current: current)
+        try manifestAndCollectorGuards()
+        if PersonalDistribution.isCandidate {
+            try await installationGuards()
+        } else if PersonalDistribution.isPersonal {
+            try await personalControllerAllowsExplicitInstall()
+        }
+    }
+
+    @MainActor
+    private static func personalControllerAllowsExplicitInstall() async throws {
+        let scratch = FileManager.default.temporaryDirectory.appendingPathComponent("personal-update-controller-\(UUID())")
+        let plan = PreparedAppUpdate(target: scratch.appendingPathComponent("Toccata Personal.app"),
+            staged: scratch.appendingPathComponent("staged.app"), backup: scratch.appendingPathComponent("backup.app"),
+            directory: scratch, originalIdentity: "0:0", version: "1.2.0", personalCDHash: String(repeating: "a", count: 40))
+        var installed: PreparedAppUpdate?
+        let updater = AppUpdateController(install: { prepared, _ in installed = prepared },
+                                          prepare: { _, _ in plan })
+        updater.download(AvailableUpdate(version: plan.version, pageURL: ReleaseChannel.personal.releasesURL))
+        for _ in 0..<100 where updater.state != .ready { try await Task.sleep(nanoseconds: 10_000_000) }
+        try expect(updater.state == .ready && installed == nil, "personal download did not wait for explicit installation")
+        updater.install()
+        try expect(updater.state == .installing && installed == plan, "explicit personal install did not reach lifecycle")
+    }
+
+    private static func packageSelection(current: AppVersion) async throws {
+        let version = "1.2.0"
+        let tag = "personal-v\(version)"
+        let channel = ReleaseChannel.personal
+        let name = channel.packageName(version: version, architecture: UpdatePackage.architecture)
+        let hash = String(repeating: "a", count: 64)
+        let asset: [String: Any] = ["name": name, "size": 23, "state": "uploaded", "digest": "sha256:\(hash)",
+                                    "browser_download_url": "https://untrusted.example/replacement"]
+        let expected = UpdatePackage(url: channel.packageURL(tag: tag, name: name), size: 23, sha256: hash)
+        let cases: [([[String: Any]], UpdatePackage?)] = [
+            ([asset], PersonalDistribution.supportsInAppUpdates ? expected : nil),
+            ([asset, asset], nil),
+            ([asset.merging(["name": "Toccata-1.2.0-arm64.dmg"], uniquingKeysWith: { _, new in new })], nil),
+            ([asset.merging(["digest": "sha256:wrong"], uniquingKeysWith: { _, new in new })], nil)
+        ]
+        for (assets, expectedPackage) in cases {
+            let service = ReleaseUpdateService(channel: channel) { request in
+                try response([item(tag).merging(["assets": assets], uniquingKeysWith: { _, new in new })], url: request.url!)
+            }
+            let update = try await service.check(current: current)
+            try expect(update?.version == version && update?.package == expectedPackage, "incorrect personal package selection")
+        }
+        try UpdatePackagePreparer.checkPersonalPackage(expected, version: version)
+        let wrongRepo = UpdatePackage(url: ReleaseChannel.upstream.packageURL(tag: tag, name: name), size: 23, sha256: hash)
+        do {
+            try UpdatePackagePreparer.checkPersonalPackage(wrongRepo, version: version)
+            throw Failure(message: "accepted package from upstream")
+        } catch UpdateInstallFailure.package {}
+    }
+
+    @MainActor
+    private static func manifestAndCollectorGuards() throws {
+        guard let physical = realpath(NSTemporaryDirectory(), nil) else { throw Failure(message: "cannot resolve fixture directory") }
+        defer { free(physical) }
+        let scratch = URL(fileURLWithPath: String(cString: physical), isDirectory: true)
+            .appendingPathComponent("personal-update-manifest-\(UUID())")
+        let channel = ReleaseChannel.personal
+        let app = scratch.appendingPathComponent(channel.appName)
+        let contents = app.appendingPathComponent("Contents")
+        try FileManager.default.createDirectory(at: contents, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        let version = "1.2.1"
+        let commit = String(repeating: "1", count: 40)
+        let info: [String: String] = ["CFBundleIdentifier": channel.bundleIdentifier, "CFBundleExecutable": channel.executableName,
+            "CFBundleShortVersionString": version, "CFBundleVersion": "5", "ToccataSourceCommit": commit,
+            "DTSDKName": "macosx26.2", "ToccataDistributionChannel": "personal-stable", "ToccataUpdateMode": "in-app"]
+        func writeInfo(_ info: [String: String]) throws {
+            try PropertyListSerialization.data(fromPropertyList: info, format: .xml, options: 0)
+                .write(to: contents.appendingPathComponent("Info.plist"))
+        }
+        try writeInfo(info)
+        try UpdatePackagePreparer.checkLocation(app, channel: channel)
+        let architecture = UpdatePackage.architecture
+        let tag = "personal-v\(version)"
+        let manifest: [String: Any] = ["schema_version": 1, "channel": "personal-stable", "version": version,
+            "build": "5", "sdk": "26.2", "commit": commit, "tag": tag, "tag_object": String(repeating: "2", count: 40),
+            "app": channel.appName, "bundle_id": channel.bundleIdentifier, "architecture": architecture, "dirty": false]
+        let package = UpdatePackage(url: channel.packageURL(tag: tag, name: channel.packageName(version: version, architecture: architecture)),
+                                    size: 100, sha256: String(repeating: "a", count: 64))
+        func writeManifest(_ value: [String: Any]) throws {
+            let data = try JSONSerialization.data(withJSONObject: value)
+            try data.write(to: scratch.appendingPathComponent("release.json"))
+            let sha = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+            try (sha + "\n").write(to: scratch.appendingPathComponent("release.json.sha256"), atomically: true, encoding: .utf8)
+        }
+        try writeManifest(manifest)
+        try Data("fixture".utf8).write(to: scratch.appendingPathComponent("安装说明.txt"))
+        try UpdatePackagePreparer.validatePersonalManifest(at: scratch, version: version, package: package)
+        try writeManifest(manifest.merging(["dirty": true], uniquingKeysWith: { _, new in new }))
+        do {
+            try UpdatePackagePreparer.validatePersonalManifest(at: scratch, version: version, package: package)
+            throw Failure(message: "accepted dirty manifest")
+        } catch UpdateInstallFailure.package {}
+        try writeManifest(manifest)
+        try writeInfo(info.merging(["ToccataDistributionChannel": "personal-candidate"], uniquingKeysWith: { _, new in new }))
+        do {
+            try UpdatePackagePreparer.validatePersonalManifest(at: scratch, version: version, package: package)
+            throw Failure(message: "accepted candidate app")
+        } catch UpdateInstallFailure.package {}
+
+        let collector = CoreProcessController(helperURL: nil, dataDirectory: scratch, socketPath: "fixture", socketIsReachable: { _ in false })
+        try expect(collector.isStoppedForPersonalUpdate(), "a missing collector lock blocked updates")
+        let lock = scratch.appendingPathComponent("toccata.lock")
+        try Data().write(to: lock)
+        let descriptor = open(lock.path, O_RDONLY)
+        guard descriptor >= 0 else { throw Failure(message: "cannot open fixture lock") }
+        defer { close(descriptor) }
+        try expect(flock(descriptor, LOCK_EX | LOCK_NB) == 0, "cannot acquire fixture lock")
+        try expect(!collector.isStoppedForPersonalUpdate(), "update allowed while collector lock was held")
+        try expect(flock(descriptor, LOCK_UN) == 0 && collector.isStoppedForPersonalUpdate(), "released collector lock blocked updates")
     }
 
     @MainActor
@@ -132,12 +248,12 @@ enum PersonalUpdateScenarios {
         do {
             _ = try await UpdatePackagePreparer(target: scratch.appendingPathComponent("missing.app")).prepare(update) { _ in }
             throw Failure(message: "personal preparer accepted an update")
-        } catch UpdateInstallFailure.personalManualUpdates {}
+        } catch UpdateInstallFailure.candidate {}
         let prepared = PreparedAppUpdate(target: scratch.appendingPathComponent("missing.app"),
             staged: scratch.appendingPathComponent("staged.app"), backup: scratch.appendingPathComponent("backup.app"),
             directory: scratch, originalIdentity: "0:0", version: "9.0.0")
         do { try await prepared.startInstaller(); throw Failure(message: "personal helper started") }
-        catch UpdateInstallFailure.personalManualUpdates {}
+        catch UpdateInstallFailure.candidate {}
         let files = try FileManager.default.contentsOfDirectory(atPath: scratch.path)
         try expect(effects == 0 && files.isEmpty,
                    "personal installation guard wrote files or invoked progress")

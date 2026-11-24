@@ -152,7 +152,8 @@ def verify_payload(app, manifest, verify_signature=True):
                        ('DTSDKName', 'macosx' + manifest['sdk'])]:
         if info.get(key) != value:
             raise ReleaseError(f'App metadata differs from manifest: {key}')
-    if info.get('ToccataUpdateMode') != 'manual' or info.get('ToccataDistributionChannel') != manifest['channel']:
+    modes = ('manual', 'in-app') if manifest['channel'] == 'personal-stable' else ('manual',)
+    if info.get('ToccataUpdateMode') not in modes or info.get('ToccataDistributionChannel') != manifest['channel']:
         raise ReleaseError('Package distribution/update policy mismatch')
     for name in ['ToccataPersonal', 'toccata-core']:
         binary = app / 'Contents/MacOS' / name
@@ -221,7 +222,7 @@ def build(candidate=False, tag=None):
         'LSMinimumSystemVersion': '13.0', 'LSUIElement': True, 'NSHighResolutionCapable': True,
         'NSSupportsAutomaticTermination': False, 'NSSupportsSuddenTermination': False,
         'DTSDKName': 'macosx' + settings['sdk_version'], 'ToccataSourceCommit': commit,
-        'ToccataDistributionChannel': channel, 'ToccataUpdateMode': 'manual',
+        'ToccataDistributionChannel': channel, 'ToccataUpdateMode': 'manual' if candidate else 'in-app',
         'ToccataUpstreamTag': settings['upstream_tag'],
         'NSInputMonitoringUsageDescription': 'Personal keyboard activity records stay on this Mac.'
     }

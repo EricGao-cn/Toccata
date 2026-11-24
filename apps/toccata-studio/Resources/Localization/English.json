@@ -579,6 +579,8 @@
   "，有记录": ", has an entry",
   "复制所选时段的全部记录和任务，不应用任务搜索。": "Copy all notes and tasks in the selected period, without the task search filter.",
   "个人版采用手动更新": "Personal builds use manual updates",
+  "隔离候选版仅可查看发布页面。": "Isolated candidates can only open the release page.",
+  "个人版采集服务仍在运行，更新已暂停。请退出其他个人版实例后重试。": "The personal collector is still running. Quit other personal instances and retry the update.",
   "请使用个人版安装包更新；安装前备份应用和数据。": "Update using a personal package. Back up the app and data before installing.",
   "隔离候选版": "Isolated candidate",
   "个人版更新": "Personal updates",

@@ -25,7 +25,7 @@ def installation_notes(version):
 4. 数据独立保存在 ~/Library/Application Support/Toccata-Personal。首次使用可从空数据开始，原版 App 与数据保留，不自动迁移。
 5. 需要键盘统计时，在“系统设置 → 隐私与安全性 → 输入监控”确认个人版权限。勿同时运行两套采集服务。
 
-关于窗口从 EricGao-cn/Toccata 检查个人正式版本；安装更新仍需手动进行。
+关于窗口从 EricGao-cn/Toccata 检查个人正式版本。支持应用内更新的版本可下载新版并点击“安装并重启”。
 DMG 只改变外层封装，内含 App 与对应版本的已验收正式包一致。
 此 App 为本机 ad-hoc 签名，未做 Developer ID 公证；磁盘映像不会修改权限、登录项或数据。
 '''
